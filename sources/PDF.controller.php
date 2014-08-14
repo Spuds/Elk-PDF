@@ -37,7 +37,7 @@ class PDF_Controller extends Action_Controller
 	 */
 	public function action_pdfpage()
 	{
-		global $topic, $scripturl, $context, $board_info, $modSettings;
+		global $topic, $context, $board_info, $modSettings;
 
 		// Redirect to the boardindex if no valid topic id is provided.
 		if (empty($topic))
@@ -83,7 +83,8 @@ class PDF_Controller extends Action_Controller
 			$context['parent_boards'][] = $parent['name'];
 
 		// Get all the messages in this topic
-		$context['posts'] = topicMessages($topic);
+		$_GET['images'] = true;
+		$context['posts'] = topicMessages($topic, false);
 		$posts_id = array_keys($context['posts']);
 
 		if (!isset($context['topic_subject']))
@@ -94,7 +95,6 @@ class PDF_Controller extends Action_Controller
 		{
 			require_once(SUBSDIR . '/Topic.subs.php');
 			$context['printattach'] = messagesAttachments(array_keys($context['posts']));
-			$context['viewing_attach'] = true;
 		}
 
 		// With all the data, lets create the PDF
@@ -113,9 +113,6 @@ class PDF_Controller extends Action_Controller
 
 		$modSettings['pdf_wmargin'] = 15;
 		$modSettings['pdf_hmargin'] = 15;
-
-		// Extra memory is always good with PDF creation
-		setMemoryLimit('128M');
 
 		// Core PDF functions
 		require_once(EXTDIR . '/tfpdf.php');
