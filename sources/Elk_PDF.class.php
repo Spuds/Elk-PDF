@@ -316,8 +316,8 @@ class ElkPdf extends tFPDF
 	}
 
 	/**
-	 * Inserts images below the post text,
-	 * Attempts to place as many on a single line as possible
+	 * Inserts images below the post text, does not do it "inline" but each on a new
+	 * line.
 	 *
 	 * @param mixed[] $attr
 	 */
@@ -326,38 +326,51 @@ class ElkPdf extends tFPDF
 		// With a source lets display it
 		if (isset($attr['src']))
 		{
-			// No specific width/height on the image tag, perhaps its in the style
+			// No specific width/height on the image tag, so perhaps its in the style
 			if (isset($attr['style']) && (!isset($attr['width']) && !isset($attr['height'])))
 			{
 				// Extract the style width and height
-				if (preg_match('~.*width:(\d+)px(?:.*height:(\d+)px.*)?~', $attr['style'], $matches))
-				{
+				if (preg_match('~.*?width:(\d+)px.*?~', $attr['style'], $matches))
 					$attr['width'] = $matches[1];
-					$attr['height'] = isset($matches[2]) ? $matches[2] : $matches[1];
-				}
+				if (preg_match('~.*?height:(\d+)px.*?~', $attr['style'], $matches))
+					$attr['height'] = $matches[1];
 			}
 
-			// Nothing specified, set an abritrary thumbnail size
+			// Nothing found anywhere?
 			if (empty($attr['width']) && empty($attr['height']))
 			{
 				$attr['width'] = 0;
 				$attr['height'] = 0;
 			}
+			// Maybe width but no height, square is good
 			elseif (!empty($attr['width']) && empty($attr['height']))
 				$attr['height'] = $attr['width'];
+			// Maybe height but no width, square is dandy
 			elseif (empty($attr['width']) && !empty($attr['height']))
 				$attr['width'] = $attr['height'];
 
-			// If the image is to wide to fix, scale it
-			if ($this->_px2mm($attr['width']) > $this->page_width)
+			// Some scaling may be needed, does the image even fit on a page?
+			$width = $this->_px2mm($attr['width']);
+			$height = $this->_px2mm($attr['height']);
+			$this->_get_page_height();
+			if ($this->page_width < $width && $width >= $height)
 			{
-				$ratio =$this->_mm2px($this->page_width) / $attr['width'];
-				$attr['width'] = $this->_mm2px($this->page_width);
-				$attr['height'] = $attr['height'] * $ratio;
+				$thumbwidth = $this->page_width;
+				$thumbheight = ($thumbwidth / $width) * $height;
+			}
+			elseif ($this->page_height < $height && $height >= $width)
+			{
+				$thumbheight = $this->page_height;
+				$thumbwidth = ($thumbheight / $height) * $width;
+			}
+			else
+			{
+				$thumbheight = $height;
+				$thumbwidth = $width;
 			}
 
-			$this->Cell($this->_px2mm($attr['width']), $this->_px2mm($attr['height']), $this->Image($attr['src'], $this->GetX(), $this->GetY(), $this->_px2mm($attr['width']), $this->_px2mm($attr['height'])), 0, 0, 'L', false);
-			$this->Ln($this->_px2mm($attr['height']));
+			$this->Cell($thumbwidth, $thumbheight, $this->Image($attr['src'], $this->GetX(), $this->GetY(), $thumbwidth, $thumbheight), 0, 0, 'L', false);
+			$this->Ln($thumbheight);
 		}
 	}
 
@@ -570,5 +583,10 @@ class ElkPdf extends tFPDF
 	function _get_page_width()
 	{
 		$this->page_width = $this->w - $this->rMargin - $this->lMargin;
+	}
+
+	function _get_page_height()
+	{
+		$this->page_height = $this->h - $this->bMargin - $this->tMargin;
 	}
 }

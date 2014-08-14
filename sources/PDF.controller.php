@@ -87,8 +87,7 @@ class PDF_Controller extends Action_Controller
 		$context['posts'] = topicMessages($topic, false);
 		$posts_id = array_keys($context['posts']);
 
-		if (!isset($context['topic_subject']))
-			$context['topic_subject'] = $context['posts'][min($posts_id)]['subject'];
+		$context['topic_subject'] = $context['posts'][min($posts_id)]['subject'];
 
 		// Fetch image attachments so we can print them
 		if (!empty($modSettings['attachmentEnable']) && allowedTo('view_attachments'))
@@ -113,6 +112,9 @@ class PDF_Controller extends Action_Controller
 
 		$modSettings['pdf_wmargin'] = 15;
 		$modSettings['pdf_hmargin'] = 15;
+
+		// Extra memory is always good with PDF creation
+		setMemoryLimit('128M');
 
 		// Core PDF functions
 		require_once(EXTDIR . '/tfpdf.php');
