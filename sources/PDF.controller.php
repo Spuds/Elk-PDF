@@ -114,6 +114,9 @@ class PDF_Controller extends Action_Controller
 		$modSettings['pdf_wmargin'] = 15;
 		$modSettings['pdf_hmargin'] = 15;
 
+		// Extra memory is always good with PDF creation
+		setMemoryLimit('128M');
+
 		// Core PDF functions
 		require_once(EXTDIR . '/tfpdf.php');
 		require_once(SUBSDIR . '/Elk_PDF.class.php');
