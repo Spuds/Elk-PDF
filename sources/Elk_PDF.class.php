@@ -23,6 +23,7 @@ class ElkPdf extends tFPDF
 	var $page_width;
 	var $in_quote = 0;
 	var $quote_start_y;
+	var $line_height = 5;
 
 	/**
 	 * Converts a block of HTML to appropriate fPDF commands
@@ -38,51 +39,39 @@ class ElkPdf extends tFPDF
 		$this->SetFont('DejaVu', '', 10);
 
 		$a = preg_split('~<(.*?)>~', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
-		$skip = false;
 		foreach ($a as $i => $e)
 		{
-			if (!$skip)
+			// Between the tags, is the text
+			if ($i % 2 == 0)
 			{
-				// Between the tags, is the text
-				if ($i % 2 == 0)
-				{
-					// Text
-					if ($this->_href)
-					{
-						$this->_add_link($this->_href, $e);
-						$skip = true;
-					}
-					elseif (!empty($e))
-						$this->Write(5, $e);
-				}
-				// HTML Tag
-				else
-				{
-					// Ending Tag?
-					if ($e[0] == '/')
-						$this->_close_tag(trim(substr($e,1)));
-					else
-					{
-						// Opening Tag
-						$a2 = explode(' ', $e);
-						$tag = array_shift($a2);
-
-						// Extract any attributes
-						$attr = array();
-						foreach ($a2 as $value)
-						{
-							if (preg_match('~([^=]*)=["\']?([^"\']*)~', $value, $a3))
-								$attr[strtolower($a3[1])] = $a3[2];
-						}
-
-						$this->_open_tag($tag, $attr);
-					}
-				}
+				// Text or link text?
+				if ($this->_href)
+					$this->_add_link($this->_href, $e);
+				elseif (!empty($e))
+					$this->Write($this->line_height, $e);
 			}
+			// HTML Tag
 			else
 			{
-				$this->_href = '';
-				$skip = false;
+				// Ending Tag?
+				if ($e[0] == '/')
+					$this->_close_tag(trim(substr($e,1)));
+				else
+				{
+					// Opening Tag
+					$a2 = explode(' ', $e);
+					$tag = array_shift($a2);
+
+					// Extract any attributes
+					$attr = array();
+					foreach ($a2 as $value)
+					{
+						if (preg_match('~([^=]*)=["\']?([^"\']*)~', $value, $a3))
+							$attr[strtolower($a3[1])] = $a3[2];
+					}
+
+					$this->_open_tag($tag, $attr);
+				}
 			}
 		}
 	}
@@ -110,7 +99,7 @@ class ElkPdf extends tFPDF
 				$this->SetFont('DejaVuMono', '', 7);
 				$this->_set_style('b', false);
 				$this->_set_style('i', false);
-				$this->Ln(5);
+				$this->Ln($this->line_height);
 				$this->_draw_line();
 				break;
 			case 'blockquote':
@@ -129,30 +118,20 @@ class ElkPdf extends tFPDF
 				$this->_href = $attr['href'];
 				break;
 			case 'img':
-				if (isset($attr['src']) && (isset($attr['width']) || isset($attr['height'])))
-				{
-					if (!isset($attr['width']))
-						$attr['width'] = 0;
-
-					if (!isset($attr['height']))
-						$attr['height'] = 0;
-
-					$this->Image($attr['src'], $this->GetX(), $this->GetY(), $this->_px2mm($attr['width']), $this->_px2mm($attr['height']));
-					$this->Ln(3);
-				}
+				$this->_add_image($attr);
 				break;
 			case 'li':
-				$this->Ln(5);
+				$this->Ln($this->line_height);
 				$this->SetTextColor(190, 0, 0);
-				$this->Write(5, '     » ');
+				$this->Write($this->line_height, '     » ');
 				$this->_elk_set_text_color(-1);
 				break;
 			case 'br':
 			case 'p':
-				$this->Ln(5);
+				$this->Ln($this->line_height);
 				break;
 			case 'div':
-				$this->Ln(5);
+				$this->Ln($this->line_height);
 
 				// If its the start of a quote block
 				if (isset($attr['class']) && $attr['class'] == 'quoteheader')
@@ -248,7 +227,7 @@ class ElkPdf extends tFPDF
 		if ($this->in_quote > 0)
 			$this->Rect($this->lMargin, $this->quote_start_y, ($this->w - $this->rMargin - $this->lMargin), ($this->h - $this->quote_start_y - $this->bMargin), 1, 'D');
 
-		return true;
+		return $this->AutoPageBreak;
 	}
 
 	/**
@@ -270,8 +249,8 @@ class ElkPdf extends tFPDF
 		// Underline blue text for links
 		$this->SetTextColor(0, 0, 255);
 		$this->_set_style('u', true);
-		$this->SetFont('DejaVu', '', 8);
-		$this->Write(5, $caption ? $caption : '', $url);
+		$this->SetFont('DejaVu', '', 10);
+		$this->Write($this->line_height, $caption ? $caption : '', $url);
 		$this->SetFont('DejaVu', '', 10);
 		$this->_set_style('u', false);
 		$this->SetTextColor(-1);
@@ -285,7 +264,7 @@ class ElkPdf extends tFPDF
 	 */
 	function add_attachments($attach)
 	{
-		$this->Ln(5);
+		$this->Ln($this->line_height);
 		$this->_draw_line();
 		$this->Ln(2);
 
@@ -318,22 +297,68 @@ class ElkPdf extends tFPDF
 					$a['height'] = $a['width'] * $ratio;
 				}
 
-				$this->image_line += $this->_px2mm($a['width']) + 5;
+				$this->image_line += $this->_px2mm($a['width']) + $this->line_height;
 				if ($this->image_line > $this->page_width)
 				{
 					// New row, move the cursor to the next row based on the tallest image
 					$this->image_line = 0;
-					$this->Ln($this->image_height + 5);
+					$this->Ln($this->image_height + $this->line_height);
 					$this->image_height = 0;
 				}
 
 				$this->image_height = max($this->image_height, $this->_px2mm($a['height']));
-				$this->Cell($this->_px2mm($a['width']) + 5, $this->_px2mm($a['height']) + 5, $this->Image($a['filename'], $this->GetX(), $this->GetY(), $this->_px2mm($a['width']), null, $type), 0, 0, 'L', false );
+				$this->Cell($this->_px2mm($a['width']) + $this->line_height, $this->_px2mm($a['height']) + $this->line_height, $this->Image($a['filename'], $this->GetX(), $this->GetY(), $this->_px2mm($a['width']), null, $type), 0, 0, 'L', false );
 			}
 		}
 
 		// Last image, move the cursor position to the next row
 		$this->Ln(max($this->image_height, $this->_px2mm($a['height'])));
+	}
+
+	/**
+	 * Inserts images below the post text,
+	 * Attempts to place as many on a single line as possible
+	 *
+	 * @param mixed[] $attr
+	 */
+	function _add_image($attr)
+	{
+		// With a source lets display it
+		if (isset($attr['src']))
+		{
+			// No specific width/height on the image tag, perhaps its in the style
+			if (isset($attr['style']) && (!isset($attr['width']) && !isset($attr['height'])))
+			{
+				// Extract the style width and height
+				if (preg_match('~.*width:(\d+)px(?:.*height:(\d+)px.*)?~', $attr['style'], $matches))
+				{
+					$attr['width'] = $matches[1];
+					$attr['height'] = isset($matches[2]) ? $matches[2] : $matches[1];
+				}
+			}
+
+			// Nothing specified, set an abritrary thumbnail size
+			if (empty($attr['width']) && empty($attr['height']))
+			{
+				$attr['width'] = 0;
+				$attr['height'] = 0;
+			}
+			elseif (!empty($attr['width']) && empty($attr['height']))
+				$attr['height'] = $attr['width'];
+			elseif (empty($attr['width']) && !empty($attr['height']))
+				$attr['width'] = $attr['height'];
+
+			// If the image is to wide to fix, scale it
+			if ($this->_px2mm($attr['width']) > $this->page_width)
+			{
+				$ratio =$this->_mm2px($this->page_width) / $attr['width'];
+				$attr['width'] = $this->_mm2px($this->page_width);
+				$attr['height'] = $attr['height'] * $ratio;
+			}
+
+			$this->Cell($this->_px2mm($attr['width']), $this->_px2mm($attr['height']), $this->Image($attr['src'], $this->GetX(), $this->GetY(), $this->_px2mm($attr['width']), $this->_px2mm($attr['height'])), 0, 0, 'L', false);
+			$this->Ln($this->_px2mm($attr['height']));
+		}
 	}
 
 	/**
@@ -346,31 +371,31 @@ class ElkPdf extends tFPDF
 		// The question
 		$this->Ln(2);
 		$this->SetFont('DejaVu', '', 10);
-		$this->Write(5, $txt['poll_question'] . ': ');
+		$this->Write($this->line_height, $txt['poll_question'] . ': ');
 		$this->SetFont('DejaVu', 'B', 10);
-		$this->Write(5, $name);
+		$this->Write($this->line_height, $name);
 		$this->SetFont('DejaVu', '', 10);
-		$this->Ln(5);
+		$this->Ln($this->line_height);
 
 		// Choices with vote count
 		$print_options = 1;
 		foreach ($options as $option)
 		{
 			$this->SetFont('DejaVu', '', 10);
-			$this->Write(5, $txt['option'] . ' ' . $print_options++ . ' » ');
+			$this->Write($this->line_height, $txt['option'] . ' ' . $print_options++ . ' » ');
 			$this->SetFont('DejaVu', 'B', 10);
-			$this->Write(5, $option['option']);
+			$this->Write($this->line_height, $option['option']);
 			$this->SetFont('DejaVu', '', 10);
 
 			if ($allowed_view_votes)
-				$this->Write(5, ' (' . $txt['votes'] . ': ' . $option['votes'] . ')');
+				$this->Write($this->line_height, ' (' . $txt['votes'] . ': ' . $option['votes'] . ')');
 
-			$this->Ln(5);
+			$this->Ln($this->line_height);
 		}
 
 		// Close and move on
 		$this->_draw_line();
-		$this->Ln(5);
+		$this->Ln($this->line_height);
 	}
 
 	/**
@@ -387,22 +412,22 @@ class ElkPdf extends tFPDF
 		// Subject
 		$this->_draw_line();
 		$this->SetFont('DejaVu', '', 8);
-		$this->Write(5, $txt['title'] . ': ');
+		$this->Write($this->line_height, $txt['title'] . ': ');
 		$this->SetFont('DejaVu', 'B', 9);
-		$this->Write(5, $subject);
+		$this->Write($this->line_height, $subject);
 		$this->Ln(4);
 
 		// Posted by and time
 		$this->SetFont('DejaVu', '', 8);
-		$this->Write(5, $txt['post_by'] . ': ');
+		$this->Write($this->line_height, $txt['post_by'] . ': ');
 		$this->SetFont('DejaVu', 'B', 9);
-		$this->Write(5, $author . ' ');
+		$this->Write($this->line_height, $author . ' ');
 		$this->SetFont('DejaVu', '', 8);
-		$this->Write(5, $txt['search_on'] . ' ');
+		$this->Write($this->line_height, $txt['search_on'] . ' ');
 		$this->SetFont('DejaVu', 'B', 9);
-		$this->Write(5, $date);
+		$this->Write($this->line_height, $date);
 
-		$this->Ln(5);
+		$this->Ln($this->line_height);
 		$this->_draw_line();
 		$this->Ln(2);
 	}
@@ -428,10 +453,10 @@ class ElkPdf extends tFPDF
 		$this->SetFont('DejaVu', '', 9);
 		$this->_elk_set_text_color(0, 0, 0);
 		$this->SetFillColor(0, 0, 0);
-		$this->Write(5, $linktree);
-		$this->Ln(5);
+		$this->Write($this->line_height, $linktree);
+		$this->Ln($this->line_height);
 		$this->_draw_rectangle();
-		$this->Ln(5);
+		$this->Ln($this->line_height);
 
 		// If the quote block wrapped pages, reset the values to the page top
 		if ($this->in_quote)
@@ -450,9 +475,9 @@ class ElkPdf extends tFPDF
 		global $scripturl, $topic, $mbname, $txt;
 
 		$this->SetFont('DejaVu', '', 8);
-		$this->Ln(5);
+		$this->Ln($this->line_height);
 		$this->_draw_line();
-		$this->Write(5, $txt['page'] . ' ' . $this->page . ' / {elk_nb} ---- ' . $txt['topic'] . ' ' . $txt['link'] . ': ');
+		$this->Write($this->line_height, $txt['page'] . ' ' . $this->page . ' / {elk_nb} ---- ' . $txt['topic'] . ' ' . $txt['link'] . ': ');
 		$this->_add_link($scripturl . '?topic=' . $topic, $mbname);
 	}
 
