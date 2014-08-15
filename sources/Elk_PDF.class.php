@@ -282,7 +282,7 @@ class ElkPdf extends tFPDF
 	{
 		// If in a quote block, close the current outline box
 		if ($this->in_quote > 0)
-			$this->Rect($this->lMargin, $this->quote_start_y, ($this->w - $this->rMargin - $this->lMargin), ($this->h - $this->quote_start_y - $this->bMargin), 1, 'D');
+			$this->Rect($this->lMargin, $this->quote_start_y, ($this->w - $this->rMargin - $this->lMargin), ($this->h - $this->quote_start_y - $this->bMargin), 'D');
 
 		return $this->AutoPageBreak;
 	}
@@ -292,7 +292,7 @@ class ElkPdf extends tFPDF
 	 */
 	function _draw_box()
 	{
-		$this->Rect($this->lMargin, $this->quote_start_y, ($this->w - $this->rMargin - $this->lMargin), ($this->GetY() - $this->quote_start_y), 1, 'D');
+		$this->Rect($this->lMargin, $this->quote_start_y, ($this->w - $this->rMargin - $this->lMargin), ($this->GetY() - $this->quote_start_y), 'D');
 	}
 
 	/**
@@ -536,7 +536,7 @@ class ElkPdf extends tFPDF
 	 */
 	function end_message()
 	{
-		$this->Ln(12);
+		$this->Ln(10);
 	}
 
 	/**
@@ -577,7 +577,9 @@ class ElkPdf extends tFPDF
 		$this->Ln($this->line_height);
 		$this->_draw_line();
 		$this->Write($this->line_height, $txt['page'] . ' ' . $this->page . ' / {elk_nb} ---- ' . $txt['topic'] . ' ' . $txt['link'] . ': ');
+		$this->in_quote++;
 		$this->_add_link($scripturl . '?topic=' . $topic, $mbname);
+		$this->in_quote--;
 	}
 
 	/**
