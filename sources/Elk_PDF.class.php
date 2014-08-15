@@ -42,6 +42,8 @@ class ElkPdf extends tFPDF
 	var $_first_node = true;
 	// Image types we support
 	var $_validImageTypes = array(1 => 'gif', 2 => 'jpg', 3 => 'png', 9 => 'jpg');
+	// holds html object from domparser str_get_html
+	var $doc;
 
 	/**
 	 * Converts a block of HTML to appropriate fPDF commands
@@ -265,7 +267,7 @@ class ElkPdf extends tFPDF
 	 * Start a new page
 	 * @param type $title
 	 */
-	function begin_page($title)
+	function begin_page()
 	{
 		$this->AddPage();
 		$this->_get_page_width();
@@ -368,7 +370,8 @@ class ElkPdf extends tFPDF
 		}
 
 		// Last image, move the cursor position to the next row
-		$this->Ln(max($this->image_height, $a['height']));
+		if (isset($a['height']))
+			$this->Ln(max($this->image_height, $a['height']));
 	}
 
 	/**
@@ -606,7 +609,7 @@ class ElkPdf extends tFPDF
 	 * Keeps track of nesting
 	 *
 	 * @param string $tag
-	 * @param int $enable
+	 * @param boolean $enable
 	 */
 	function _set_style($tag, $enable)
 	{

@@ -151,7 +151,7 @@ class PDF_Controller extends Action_Controller
 				$pdf->add_poll(html_entity_decode($context['poll']['question']), $context['poll']['options'], $context['allow_poll_view']);
 
 			// Write message body.
-			$pdf->write_html(html_entity_decode(htmlspecialchars_decode($post['body'], ENT_QUOTES), ENT_QUOTES, 'UTF-8'));
+			$pdf->write_html($post['body']);
 
 			// Show attachment images
 			if (!empty($context['printattach'][$post['id_msg']]))
@@ -173,8 +173,8 @@ class PDF_Controller extends Action_Controller
 
 		if ($_SERVER['SERVER_PORT'] == '443' && (strpos($_SERVER['HTTP_USER_AGENT'], 'MSIE') !== false))
 		{
-			header('Cache-Control: must-revalidate, post-check=0, pre-check=0', 1);
-			header('Pragma: public', 1);
+			header('Cache-Control: must-revalidate, post-check=0, pre-check=0', true);
+			header('Pragma: public', true);
 		}
 
 		header('Content-Length: ' . strlen($out));
