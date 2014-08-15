@@ -14,16 +14,34 @@ if (!defined('ELK'))
 
 class ElkPdf extends tFPDF
 {
+	// Current href src
 	var $_href = '';
+	// Depth of b
 	var $b;
+	// Depth of u
 	var $u;
+	// Depth of i
 	var $i;
+	// Total width of images in a line of images
 	var $image_line = 0;
+	// Tallest image in a line
 	var $image_height = 0;
+	// Page width less margins
 	var $page_width;
+	// Page height less margins
+	var $page_height;
+	// If we are in a quote or not
 	var $in_quote = 0;
+	// Start postion of a quote block, used to draw a box
 	var $quote_start_y;
+	// Line height for breaks etc
 	var $line_height = 5;
+	// The html that will be parsed
+	var $html = '';
+	// If this the first node, used to prevent excess whitespace at start
+	var $_first_node = true;
+	// Image types we support
+	var $_validImageTypes = array(1 => 'gif', 2 => 'jpg', 3 => 'png', 9 => 'jpg');
 
 	/**
 	 * Converts a block of HTML to appropriate fPDF commands
@@ -32,13 +50,15 @@ class ElkPdf extends tFPDF
 	 */
 	function write_html($html)
 	{
-		// Remove unsupported tags
-		$html = strip_tags($html, '<a><img><p><div><br><blockquote><pre><ol><ul><li><hr><b><i><u><strong><em>');
+		// Prepare the html for PDF-ifiing
+		$this->html = $html;
+		$this->_prepare_html();
 
 		// Set the default font family
 		$this->SetFont('DejaVu', '', 10);
 
-		$a = preg_split('~<(.*?)>~', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
+		// Split up all the tags
+		$a = preg_split('~<(.*?)>~', $this->html, -1, PREG_SPLIT_DELIM_CAPTURE);
 		foreach ($a as $i => $e)
 		{
 			// Between the tags, is the text
@@ -74,6 +94,36 @@ class ElkPdf extends tFPDF
 				}
 			}
 		}
+	}
+
+	/**
+	 * Cleans up the HTML by removing tags / blocks that we can not render
+	 */
+	function _prepare_html()
+	{
+		// Up front, remove whitespace between html tags
+		$this->html = preg_replace('/(?:(?<=\>)|(?<=\/\>))(\s+)(?=\<\/?)/', '', $this->html);
+
+		// The external lib is easier to use for class searches
+		require_once(EXTDIR . '/simple_html_dom.php');
+		$this->doc = str_get_html($this->html, true, true, 'UTF-8', false);
+
+		$elements = $this->doc->find('div.aeva_details');
+		foreach ($elements as $node)
+			$node->outertext = '';
+		$elements = $this->doc->find('div.aep a');
+		foreach ($elements as $node)
+		{
+			$link = $node->href;
+			$node->parent()->outertext = '<img src="' . $link . '">';
+		}
+
+		// Get whats left
+		$this->html = $this->doc->save();
+
+		// Clean it up for proper printing
+		$this->html = html_entity_decode(htmlspecialchars_decode($this->html, ENT_QUOTES), ENT_QUOTES, 'UTF-8');
+		$this->html = strip_tags($this->html, '<a><img><div><p><br><blockquote><pre><ol><ul><li><hr><b><i><u><strong><em>');
 	}
 
 	/**
@@ -128,10 +178,12 @@ class ElkPdf extends tFPDF
 				break;
 			case 'br':
 			case 'p':
-				$this->Ln($this->line_height);
+				if (!$this->_first_node)
+					$this->Ln($this->line_height);
 				break;
 			case 'div':
-				$this->Ln($this->line_height);
+				if (!$this->_first_node)
+					$this->Ln($this->line_height);
 
 				// If its the start of a quote block
 				if (isset($attr['class']) && $attr['class'] == 'quoteheader')
@@ -159,6 +211,8 @@ class ElkPdf extends tFPDF
 				$this->_draw_line();
 				break;
 		}
+
+		$this->_first_node = false;
 	}
 
 	/**
@@ -215,6 +269,7 @@ class ElkPdf extends tFPDF
 	{
 		$this->AddPage();
 		$this->_get_page_width();
+		$this->_get_page_height();
 	}
 
 	/**
@@ -249,7 +304,7 @@ class ElkPdf extends tFPDF
 		// Underline blue text for links
 		$this->SetTextColor(0, 0, 255);
 		$this->_set_style('u', true);
-		$this->SetFont('DejaVu', '', 10);
+		$this->SetFont('DejaVu', '', ($this->in_quote ? 8 : 10));
 		$this->Write($this->line_height, $caption ? $caption : '', $url);
 		$this->SetFont('DejaVu', '', 10);
 		$this->_set_style('u', false);
@@ -287,32 +342,33 @@ class ElkPdf extends tFPDF
 					break;
 			}
 
+			// Its an image type fPDF understands
 			if (!empty($type))
 			{
 				// If the image is to wide to fix, scale it
-				if ($this->_px2mm($a['width']) > $this->page_width)
-				{
-					$ratio = $a['width'] / $a['height'];
-					$a['width'] = $this->_mm2px($this->page_width);
-					$a['height'] = $a['width'] * $ratio;
-				}
+				list($a['width'], $a['height']) = $this->_scale_image($a['width'], $a['height']);
 
-				$this->image_line += $this->_px2mm($a['width']) + $this->line_height;
+				// Does it fit on this row
+				$this->image_line += $a['width'] + $this->line_height;
 				if ($this->image_line > $this->page_width)
 				{
-					// New row, move the cursor to the next row based on the tallest image
+					// New row, move the cursor down to the next row based on the tallest image
 					$this->image_line = 0;
 					$this->Ln($this->image_height + $this->line_height);
 					$this->image_height = 0;
 				}
 
-				$this->image_height = max($this->image_height, $this->_px2mm($a['height']));
-				$this->Cell($this->_px2mm($a['width']) + $this->line_height, $this->_px2mm($a['height']) + $this->line_height, $this->Image($a['filename'], $this->GetX(), $this->GetY(), $this->_px2mm($a['width']), null, $type), 0, 0, 'L', false );
+				// Does it fit on this page, or is a new one needed?
+				if ($this->y + $a['height'] > $this->page_height)
+					$this->AddPage();
+
+				$this->image_height = max($this->image_height, $a['height']);
+				$this->Cell($a['width'] + $this->line_height, $a['height'] + $this->line_height, $this->Image($a['filename'], $this->GetX(), $this->GetY(), $a['width'], $a['height'], $type), 0, 0, 'L', false );
 			}
 		}
 
 		// Last image, move the cursor position to the next row
-		$this->Ln(max($this->image_height, $this->_px2mm($a['height'])));
+		$this->Ln(max($this->image_height, $a['height']));
 	}
 
 	/**
@@ -339,8 +395,11 @@ class ElkPdf extends tFPDF
 			// Nothing found anywhere?
 			if (empty($attr['width']) && empty($attr['height']))
 			{
-				$attr['width'] = 0;
-				$attr['height'] = 0;
+				// Slow route to find some info on the image
+				list($width, $height, $type) = @getimagesize($attr['src']);
+				$attr['width'] = $width;
+				$attr['height'] = $height;
+				$attr['type'] = isset($this->_validImageTypes[$type]) ? $this->_validImageTypes[$type] : '';
 			}
 			// Maybe width but no height, square is good
 			elseif (!empty($attr['width']) && empty($attr['height']))
@@ -350,32 +409,52 @@ class ElkPdf extends tFPDF
 				$attr['width'] = $attr['height'];
 
 			// Some scaling may be needed, does the image even fit on a page?
-			$width = $this->_px2mm($attr['width']);
-			$height = $this->_px2mm($attr['height']);
-			$this->_get_page_height();
-			if ($this->page_width < $width && $width >= $height)
-			{
-				$thumbwidth = $this->page_width;
-				$thumbheight = ($thumbwidth / $width) * $height;
-			}
-			elseif ($this->page_height < $height && $height >= $width)
-			{
-				$thumbheight = $this->page_height;
-				$thumbwidth = ($thumbheight / $height) * $width;
-			}
-			else
-			{
-				$thumbheight = $height;
-				$thumbwidth = $width;
-			}
+			list($thumbwidth, $thumbheight) = $this->_scale_image($attr['width'], $attr['height']);
 
 			// Does it fit on this page, or is a new one needed?
 			if ($this->y + $thumbheight > $this->page_height)
 				$this->AddPage();
 
-			$this->Cell($thumbwidth, $thumbheight, $this->Image($attr['src'], $this->GetX(), $this->GetY(), $thumbwidth, $thumbheight), 0, 0, 'L', false);
+			$this->Cell($thumbwidth, $thumbheight, $this->Image($attr['src'], $this->GetX(), $this->GetY(), $thumbwidth, $thumbheight, isset($attr['type']) ? $attr['type'] : ''), 0, 0, 'L', false);
 			$this->Ln($thumbheight);
 		}
+	}
+
+	/**
+	 * Scale an image to fit in the page limits
+	 * Returns the image width height in page units not px
+	 *
+	 * @param int $width in px
+	 * @param int $height in px
+	 */
+	function _scale_image($width, $height)
+	{
+		// Normalize to page units
+		$width = $this->_px2mm($width);
+		$height = $this->_px2mm($height);
+
+		// Max width and height
+		$max_width = $this->page_width / 2 - $this->line_height;
+		$max_height = $this->page_height / 2 - $this->line_height;
+
+		// Some scaling may be needed, does the image even fit on a page?
+		if ($max_width < $width && $width >= $height)
+		{
+			$thumbwidth = $max_width;
+			$thumbheight = ($thumbwidth / $width) * $height;
+		}
+		elseif ($max_height < $height && $height >= $width)
+		{
+			$thumbheight = $max_height;
+			$thumbwidth = ($thumbheight / $height) * $width;
+		}
+		else
+		{
+			$thumbheight = $height;
+			$thumbwidth = $width;
+		}
+
+		return array(round($thumbwidth, 0), round($thumbheight, 0));
 	}
 
 	/**
