@@ -369,6 +369,10 @@ class ElkPdf extends tFPDF
 				$thumbwidth = $width;
 			}
 
+			// Does it fit on this page, or is a new one needed?
+			if ($this->y + $thumbheight > $this->page_height)
+				$this->AddPage();
+
 			$this->Cell($thumbwidth, $thumbheight, $this->Image($attr['src'], $this->GetX(), $this->GetY(), $thumbwidth, $thumbheight), 0, 0, 'L', false);
 			$this->Ln($thumbheight);
 		}
