@@ -161,25 +161,34 @@ class PDF_Controller extends Action_Controller
 			$count++;
 		}
 
-		// Clear anything in the buffers
-		while (@ob_get_level() > 0)
-			@ob_end_clean();
-
-		// Get the PDF output
-		$out = $pdf->Output('ElkArte' . date('Ymd') . '.pdf', 'S');
-
-		// Output content to browser
-		header('Content-Type: application/pdf');
-
-		if ($_SERVER['SERVER_PORT'] == '443' && (strpos($_SERVER['HTTP_USER_AGENT'], 'MSIE') !== false))
+		// Make sure we can send
+		if (!headers_sent($filename, $linenum))
 		{
-			header('Cache-Control: must-revalidate, post-check=0, pre-check=0', true);
-			header('Pragma: public', true);
+			// Clear anything in the buffers
+			while (@ob_get_level() > 0)
+				@ob_end_clean();
+
+			// Get the PDF output
+			$out = $pdf->Output('ElkArte' . date('Ymd') . '.pdf', 'S');
+
+			// Output content to browser
+			header('Content-Type: application/pdf');
+
+			if ($_SERVER['SERVER_PORT'] == '443' && (strpos($_SERVER['HTTP_USER_AGENT'], 'MSIE') !== false))
+			{
+				header('Cache-Control: must-revalidate, post-check=0, pre-check=0', true);
+				header('Pragma: public', true);
+			}
+
+			header('Content-Length: ' . strlen($out));
+			header('Content-disposition: inline; filename=ElkForum' . date('Ymd') . '.pdf');
+
+			echo $out;
+
+			// Just exit now
+			obExit(false);
 		}
-
-		header('Content-Length: ' . strlen($out));
-		header('Content-disposition: inline; filename=ElkForum' . date('Ymd') . '.pdf');
-
-		echo $out;
+		else
+			echo "Headers already sent in $filename on line $linenum";
 	}
 }
