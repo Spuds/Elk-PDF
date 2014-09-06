@@ -673,6 +673,9 @@ class ElkPdf extends tFPDF
 		$this->page_width = $this->w - $this->rMargin - $this->lMargin;
 	}
 
+	/**
+	 * Returns the available page height for printing
+	 */
 	function _get_page_height()
 	{
 		$this->page_height = $this->h - $this->bMargin - $this->tMargin;
