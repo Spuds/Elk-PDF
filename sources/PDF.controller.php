@@ -171,6 +171,15 @@ class PDF_Controller extends Action_Controller
 			// Get the PDF output
 			$out = $pdf->Output('ElkArte' . date('Ymd') . '.pdf', 'S');
 
+			// Set the output compression
+			if (!empty($modSettings['enableCompressedOutput']) && strlen($out) <= 4194304)
+				ob_start('ob_gzhandler');
+			else
+			{
+				ob_start();
+				header('Content-Encoding: none');
+			}
+				
 			// Output content to browser
 			header('Content-Type: application/pdf');
 

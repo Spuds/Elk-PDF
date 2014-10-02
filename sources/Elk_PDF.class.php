@@ -110,9 +110,11 @@ class ElkPdf extends tFPDF
 		require_once(EXTDIR . '/simple_html_dom.php');
 		$this->doc = str_get_html($this->html, true, true, 'UTF-8', false);
 
+		// *If* this was available, this is how to take care of it
 		$elements = $this->doc->find('div.aeva_details');
 		foreach ($elements as $node)
 			$node->outertext = '';
+
 		$elements = $this->doc->find('div.aep a');
 		foreach ($elements as $node)
 		{
