@@ -151,7 +151,7 @@ class PDF_Controller extends Action_Controller
 				$pdf->add_poll(html_entity_decode($context['poll']['question']), $context['poll']['options'], $context['allow_poll_view']);
 
 			// Write message body.
-			$pdf->write_html($post['body']);
+			$pdf->write_html(preg_replace_callback('~(&#(\d{1,7}|x[0-9a-fA-F]{1,6});)~', 'fixchar__callback', $post['body']));
 
 			// Show attachment images
 			if (!empty($context['printattach'][$post['id_msg']]))
@@ -179,7 +179,7 @@ class PDF_Controller extends Action_Controller
 				ob_start();
 				header('Content-Encoding: none');
 			}
-				
+
 			// Output content to browser
 			header('Content-Type: application/pdf');
 
