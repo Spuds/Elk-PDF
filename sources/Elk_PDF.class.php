@@ -510,6 +510,10 @@ class ElkPdf extends tFPDF
 	{
 		global $txt;
 
+		// Make sure the head stays with the body
+		if ($this->y + 4 > $this->page_height)
+			$this->AddPage();
+
 		// Subject
 		$this->_draw_line();
 		$this->SetFont('DejaVu', '', 8);
