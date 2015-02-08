@@ -5,7 +5,7 @@
  * @author Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.1
+ * @version 1.0.2
  *
  */
 
@@ -44,13 +44,17 @@ class ElkPdf extends tFPDF
 	var $_validImageTypes = array(1 => 'gif', 2 => 'jpg', 3 => 'png', 9 => 'jpg');
 	// holds html object from domparser str_get_html
 	var $doc;
+	// holds loaded image data
+	var $image_data;
+	// holds results of getimagesize
+	var $image_info;
 
 	/**
 	 * Converts a block of HTML to appropriate fPDF commands
 	 *
 	 * @param string $html
 	 */
-	function write_html($html)
+	public function write_html($html)
 	{
 		// Prepare the html for PDF-ifiing
 		$this->html = $html;
@@ -101,7 +105,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Cleans up the HTML by removing tags / blocks that we can not render
 	 */
-	function _prepare_html()
+	private function _prepare_html()
 	{
 		// Up front, remove whitespace between html tags
 		$this->html = preg_replace('/(?:(?<=\>)|(?<=\/\>))(\s+)(?=\<\/?)/', '', $this->html);
@@ -110,17 +114,8 @@ class ElkPdf extends tFPDF
 		require_once(EXTDIR . '/simple_html_dom.php');
 		$this->doc = str_get_html($this->html, true, true, 'UTF-8', false);
 
-		// *If* this was available, this is how to take care of it
-		$elements = $this->doc->find('div.aeva_details');
-		foreach ($elements as $node)
-			$node->outertext = '';
-
-		$elements = $this->doc->find('div.aep a');
-		foreach ($elements as $node)
-		{
-			$link = $node->href;
-			$node->parent()->outertext = '<img src="' . $link . '">';
-		}
+		// Gallerys are kind of special
+		$this->_prepare_gallery();
 
 		// Get whats left
 		$this->html = $this->doc->save();
@@ -136,7 +131,7 @@ class ElkPdf extends tFPDF
 	 * @param string $tag
 	 * @param mixed[] $attr
 	 */
-	function _open_tag($tag, $attr)
+	private function _open_tag($tag, $attr)
 	{
 		$tag = strtolower($tag);
 
@@ -224,7 +219,7 @@ class ElkPdf extends tFPDF
 	 *
 	 * @param string $tag
 	 */
-	function _close_tag($tag)
+	private function _close_tag($tag)
 	{
 		$tag = strtolower($tag);
 
@@ -269,7 +264,7 @@ class ElkPdf extends tFPDF
 	 * Start a new page
 	 * @param type $title
 	 */
-	function begin_page()
+	public function begin_page()
 	{
 		$this->AddPage();
 		$this->_get_page_width();
@@ -280,7 +275,7 @@ class ElkPdf extends tFPDF
 	 * Called when a page break needs to occur
 	 * @return boolean
 	 */
-	function AcceptPageBreak()
+	public function AcceptPageBreak()
 	{
 		// If in a quote block, close the current outline box
 		if ($this->in_quote > 0)
@@ -292,7 +287,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Draws a rectangular box around a quoteblock
 	 */
-	function _draw_box()
+	private function _draw_box()
 	{
 		$this->Rect($this->lMargin, $this->quote_start_y, ($this->w - $this->rMargin - $this->lMargin), ($this->GetY() - $this->quote_start_y), 'D');
 	}
@@ -303,16 +298,54 @@ class ElkPdf extends tFPDF
 	 * @param string $url
 	 * @param string $caption
 	 */
-	function _add_link($url, $caption = '')
+	private function _add_link($url, $caption = '')
 	{
 		// Underline blue text for links
 		$this->SetTextColor(0, 0, 255);
 		$this->_set_style('u', true);
 		$this->SetFont('DejaVu', '', ($this->in_quote ? 8 : 10));
-		$this->Write($this->line_height, $caption ? $caption : '', $url);
+		$this->Write($this->line_height, $caption ? $caption : ' ', $url);
 		$this->SetFont('DejaVu', '', 10);
 		$this->_set_style('u', false);
 		$this->SetTextColor(-1);
+	}
+
+	/**
+	 * An example for gallerys, gets the image filename that will be used to load
+	 * locally via _fetch_image().  Sets an .gal extension used to let _fetch_image
+	 * know that its a local file it need to attempt to load.
+	 */
+	private function _prepare_gallery()
+	{
+		global $settings;
+
+		// Dependencies
+		require_once(SUBSDIR . '/Aeva-Subs.php');
+		aeva_loadSettings();
+
+		// Remove extra markup not needed
+		$elements = $this->doc->find('div.caption');
+		foreach ($elements as $node)
+			$node->outertext = '';
+
+		// All the gallery links
+		$elements = $this->doc->find('table.aextbox td a');
+		foreach ($elements as $node)
+		{
+			// Get the id
+			$type = 'preview';
+			$id = '';
+			if (preg_match('~.*in=(\d+).*~', $node->href, $match))
+				$id = (int) $match[1];
+
+			if (empty($id) || !aeva_allowedTo('access'))
+				$path = $settings['theme_dir'] . '/images/aeva/denied.png';
+			else
+				list($path, ,) = aeva_getMediaPath($id, $type);
+
+			// Set the image src to the file location so it can be fetched.
+			$node->parent()->outertext = '<img src="' . (!empty($path) ? $path : $settings['theme_dir'] . '/images/aeva/denied.png') . '.gal">';
+		}
 	}
 
 	/**
@@ -321,7 +354,7 @@ class ElkPdf extends tFPDF
 	 *
 	 * @param mixed[] $attach
 	 */
-	function add_attachments($attach)
+	public function add_attachments($attach)
 	{
 		$this->Ln($this->line_height);
 		$this->_draw_line();
@@ -382,12 +415,28 @@ class ElkPdf extends tFPDF
 	 *
 	 * @param mixed[] $attr
 	 */
-	function _add_image($attr)
+	private function _add_image($attr)
 	{
-		// With a source lets display it
+		// With a source lets fetch it
 		if (isset($attr['src']))
 		{
-			// No specific width/height on the image tag, so perhaps its in the style
+			// Load the image in to memory, set type based on what is loaded
+			$this->_fetch_image($attr['src']);
+
+			// Nothing loaded, or not an image we process or ... show a link instead
+			if (empty($this->image_data) || empty($this->image_info) || !isset($this->_validImageTypes[$this->image_info[2]]))
+			{
+				$caption = pathinfo($attr['src']);
+				$caption = ' [ ' . (!empty($attr['title']) ? $attr['title'] : $caption['basename']) . ' ] ';
+				$this->_add_link($attr['src'], $caption);
+
+				return;
+			}
+
+			// Set the type based on what was loaded
+			$attr['type'] = $this->_validImageTypes[$this->image_info[2]];
+
+			// If no specific width/height was on the image tag, check if its in the style
 			if (isset($attr['style']) && (!isset($attr['width']) && !isset($attr['height'])))
 			{
 				// Extract the style width and height
@@ -397,19 +446,16 @@ class ElkPdf extends tFPDF
 					$attr['height'] = $matches[1];
 			}
 
-			// Nothing found anywhere?
+			// No size set that we can find, so just use the image size
 			if (empty($attr['width']) && empty($attr['height']))
 			{
-				// Slow route to find some info on the image
-				list($width, $height, $type) = @getimagesize($attr['src']);
-				$attr['width'] = $width;
-				$attr['height'] = $height;
-				$attr['type'] = isset($this->_validImageTypes[$type]) ? $this->_validImageTypes[$type] : '';
+				$attr['width'] = $this->image_info[0];
+				$attr['height'] = $this->image_info[1];
 			}
-			// Maybe width but no height, square is good
+			// Maybe a width but no height, square is good
 			elseif (!empty($attr['width']) && empty($attr['height']))
 				$attr['height'] = $attr['width'];
-			// Maybe height but no width, square is dandy
+			// Maybe a height but no width, square is dandy
 			elseif (empty($attr['width']) && !empty($attr['height']))
 				$attr['width'] = $attr['height'];
 
@@ -420,9 +466,42 @@ class ElkPdf extends tFPDF
 			if ($this->y + $thumbheight > $this->page_height)
 				$this->AddPage();
 
-			$this->Cell($thumbwidth, $thumbheight, $this->Image($attr['src'], $this->GetX(), $this->GetY(), $thumbwidth, $thumbheight, isset($attr['type']) ? $attr['type'] : ''), 0, 0, 'L', false);
+			// Use our stream wrapper since we have the data in memory
+			$elkimg = 'img' . md5($this->image_data);
+			$GLOBALS[$elkimg] = $this->image_data;
+			$this->Ln($this->line_height);
+			$this->Cell($thumbwidth, $thumbheight, $this->Image('elkimg://' . $elkimg, $this->GetX(), $this->GetY(), $thumbwidth, $thumbheight, isset($attr['type']) ? $attr['type'] : ''), 0, 0, 'L', false);
 			$this->Ln($thumbheight);
+			unset($GLOBALS[$elkimg], $this->image_data, $this->image_info);
 		}
+	}
+
+	/**
+	 * Given an image URL simply load its data to memory
+	 *
+	 * @param string $name
+	 */
+	private function _fetch_image($name)
+	{
+		global $boardurl;
+
+		require_once(SUBSDIR . '/Package.subs.php');
+
+		// Local file or remote?
+		$pathinfo = pathinfo($name);
+		if ((strpos($name, $boardurl) !== false && in_array($pathinfo['extension'], $this->_validImageTypes)) || $pathinfo['extension'] == 'gal')
+		{
+			// Gallery image?
+			if ($pathinfo['extension'] == 'gal')
+				$name = substr($name, 0, -4);
+
+			$this->image_data = file_get_contents(str_replace($boardurl, BOARDDIR, $name));
+		}
+		else
+			$this->image_data = fetch_web_data($name);
+
+		// Image size and type
+		$this->image_info = @getimagesizefromstring($this->image_data);
 	}
 
 	/**
@@ -432,7 +511,7 @@ class ElkPdf extends tFPDF
 	 * @param int $width in px
 	 * @param int $height in px
 	 */
-	function _scale_image($width, $height)
+	private function _scale_image($width, $height)
 	{
 		// Normalize to page units
 		$width = $this->_px2mm($width);
@@ -465,7 +544,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Add the poll question, options, and vote count
 	 */
-	function add_poll($name, $options, $allowed_view_votes)
+	public function add_poll($name, $options, $allowed_view_votes)
 	{
 		global $txt;
 
@@ -506,7 +585,7 @@ class ElkPdf extends tFPDF
 	 * @param string $author
 	 * @param string $date
 	 */
-	function message_header($subject, $author, $date)
+	public function message_header($subject, $author, $date)
 	{
 		global $txt;
 
@@ -540,7 +619,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Items to print below the end of the message to provide separation
 	 */
-	function end_message()
+	public function end_message()
 	{
 		$this->Ln(10);
 	}
@@ -548,7 +627,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Print a page header, called automatically by fPDF
 	 */
-	function header()
+	public function header()
 	{
 		global $context, $txt;
 
@@ -575,7 +654,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Output a page footer, called automatically by fPDF
 	 */
-	function footer()
+	public function footer()
 	{
 		global $scripturl, $topic, $mbname, $txt;
 
@@ -595,7 +674,7 @@ class ElkPdf extends tFPDF
 	 * @param int $g
 	 * @param int $b
 	 */
-	function _elk_set_text_color($r, $g = 0, $b = 0)
+	private function _elk_set_text_color($r, $g = 0, $b = 0)
 	{
 		static $_r = 0, $_g = 0, $_b = 0;
 
@@ -619,7 +698,7 @@ class ElkPdf extends tFPDF
 	 * @param string $tag
 	 * @param boolean $enable
 	 */
-	function _set_style($tag, $enable)
+	private function _set_style($tag, $enable)
 	{
 		// Keep track of the style depth / nesting
 		$this->$tag += ($enable ? 1 : -1);
@@ -640,7 +719,7 @@ class ElkPdf extends tFPDF
 	 *
 	 * @param int $px
 	 */
-	function _px2mm($px)
+	private function _px2mm($px)
 	{
 		return ($px * 25.4) / 96;
 	}
@@ -650,7 +729,7 @@ class ElkPdf extends tFPDF
 	 *
 	 * @param int $mm
 	 */
-	function _mm2px($mm)
+	private function _mm2px($mm)
 	{
 		return ($mm * 96) / 25.4;
 	}
@@ -658,7 +737,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Draw a horizontal line
 	 */
-	function _draw_line()
+	private function _draw_line()
 	{
 		$this->Line($this->lMargin, $this->y, ($this->w - $this->rMargin), $this->y);
 	}
@@ -666,7 +745,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Draw a filled rectangle
 	 */
-	function _draw_rectangle()
+	private function _draw_rectangle()
 	{
 		$this->Rect($this->lMargin, $this->y, (int) ($this->w - $this->lMargin - $this->lMargin), 1, 'F');
 	}
@@ -674,7 +753,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Returns the available page width for printing
 	 */
-	function _get_page_width()
+	private function _get_page_width()
 	{
 		$this->page_width = $this->w - $this->rMargin - $this->lMargin;
 	}
@@ -682,8 +761,132 @@ class ElkPdf extends tFPDF
 	/**
 	 * Returns the available page height for printing
 	 */
-	function _get_page_height()
+	private function _get_page_height()
 	{
 		$this->page_height = $this->h - $this->bMargin - $this->tMargin;
+	}
+}
+
+/**
+ * Provides basic stream functions for custom stream_wrapper_register
+ *
+ * Uses a global variable as the stream. e.g. elkpdf://varname in global space
+ */
+class VariableStream
+{
+	protected $position;
+	protected $varname;
+
+	/**
+	 * Callback for fopen()
+	 *
+	 * @param string $path
+	 * @param string $mode
+	 * @param int $options
+	 * @param string $opened_path
+	 */
+	public function stream_open($path)
+	{
+		$url = parse_url($path);
+		$this->varname = $url["host"];
+		$this->position = 0;
+
+		return true;
+	}
+
+	/**
+	 * Callback for fread()
+	 *
+	 * @param int $count
+	 */
+	public function stream_read($count)
+	{
+		if (!isset($GLOBALS[$this->varname]))
+			return '';
+
+		$ret = substr($GLOBALS[$this->varname], $this->position, $count);
+		$this->position += strlen($ret);
+
+		return $ret;
+	}
+
+	/**
+	 * Callback for fwrite()
+	 *
+	 * @param string $data
+	 */
+	public function stream_write($data)
+	{
+		if (!isset($GLOBALS[$this->varname]))
+			$GLOBALS[$this->varname] = $data;
+		else
+			$GLOBALS[$this->varname] = substr_replace($GLOBALS[$this->varname], $data, $this->position, strlen($data));
+
+		$this->position += strlen($data);
+
+		return strlen($data);
+	}
+
+	/**
+	 * Callback for ftell()
+	 */
+	public function stream_tell()
+	{
+		return $this->position;
+	}
+
+	/**
+	 * Callback for feof()
+	 */
+	public function stream_eof()
+	{
+		return !isset($GLOBALS[$this->varname]) || $this->position >= strlen($GLOBALS[$this->varname]);
+	}
+
+	/**
+	 * Callback for fseek()
+	 *
+	 * @param int $offset
+	 * @param int $whence
+	 */
+	public function stream_seek($offset, $whence)
+	{
+		$result = true;
+
+		switch ($whence)
+		{
+			case SEEK_SET:
+				if ($offset < strlen($GLOBALS[$this->varname]) && $offset >= 0)
+					$this->position = $offset;
+				else
+					$result = false;
+				break;
+			case SEEK_CUR:
+				if ($offset >= 0)
+					$this->position += $offset;
+				else
+					$result = false;
+				break;
+			case SEEK_END:
+				if (strlen($GLOBALS[$this->varname]) + $offset >= 0)
+					$this->position = strlen($GLOBALS[$this->varname]) + $offset;
+				else
+					$result = false;
+				break;
+			default:
+				$result = false;
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Callback for fstat().
+	 *
+	 * @return array
+	 */
+	public function stream_stat()
+	{
+		return array();
 	}
 }

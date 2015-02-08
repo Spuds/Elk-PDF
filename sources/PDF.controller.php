@@ -5,7 +5,7 @@
  * @author Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.1
+ * @version 1.0.2
  *
  */
 
@@ -122,6 +122,9 @@ class PDF_Controller extends Action_Controller
 
 		// Portrait, millimeter, page size (Letter, A4, etc)
 		$pdf = new ElkPdf('P', 'mm', $modSettings['pdf_page']);
+
+		// Stream handle for external images
+		stream_wrapper_register("elkimg", "VariableStream");
 
 		// Common page setup
 		$pdf->SetAuthor($forum_version);
