@@ -5,7 +5,7 @@
  * @author Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.2
+ * @version 1.0.3
  *
  */
 
@@ -114,8 +114,8 @@ class ElkPdf extends tFPDF
 		require_once(EXTDIR . '/simple_html_dom.php');
 		$this->doc = str_get_html($this->html, true, true, 'UTF-8', false);
 
-		// Gallerys are kind of special
-		$this->_prepare_gallery();
+		// Gallerys are kind of special, see this function on one way to deal with them
+		// $this->_prepare_gallery();
 
 		// Get whats left
 		$this->html = $this->doc->save();
