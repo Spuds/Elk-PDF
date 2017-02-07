@@ -32,7 +32,7 @@ class ElkPdf extends tFPDF
 	var $page_height;
 	// If we are in a quote or not
 	var $in_quote = 0;
-	// Start postion of a quote block, used to draw a box
+	// Start position of a quote block, used to draw a box
 	var $quote_start_y;
 	// Line height for breaks etc
 	var $line_height = 5;
@@ -42,7 +42,7 @@ class ElkPdf extends tFPDF
 	var $_first_node = true;
 	// Image types we support
 	var $_validImageTypes = array(1 => 'gif', 2 => 'jpg', 3 => 'png', 9 => 'jpg');
-	// holds html object from domparser str_get_html
+	// holds html object from dom parser str_get_html
 	var $doc;
 	// holds loaded image data
 	var $image_data;
@@ -80,7 +80,7 @@ class ElkPdf extends tFPDF
 			else
 			{
 				// Ending Tag?
-				if ($e[0] == '/')
+				if ($e[0] === '/')
 					$this->_close_tag(trim(substr($e,1)));
 				else
 				{
@@ -185,7 +185,7 @@ class ElkPdf extends tFPDF
 					$this->Ln($this->line_height);
 
 				// If its the start of a quote block
-				if (isset($attr['class']) && $attr['class'] == 'quoteheader')
+				if (isset($attr['class']) && $attr['class'] === 'quoteheader')
 				{
 					// Need to track the first quote so we can tag the border box start
 					if ($this->in_quote == 0)
@@ -199,7 +199,7 @@ class ElkPdf extends tFPDF
 					$this->in_quote++;
 				}
 				// Maybe a codeblock
-				elseif (isset($attr['class']) && $attr['class'] == 'codeheader')
+				elseif (isset($attr['class']) && $attr['class'] === 'codeheader')
 				{
 					$this->_draw_line();
 					$this->AddFont('DejaVuMono', '', 'DejaVuSansMono.ttf', true);
@@ -262,7 +262,6 @@ class ElkPdf extends tFPDF
 
 	/**
 	 * Start a new page
-	 * @param type $title
 	 */
 	public function begin_page()
 	{
@@ -273,6 +272,7 @@ class ElkPdf extends tFPDF
 
 	/**
 	 * Called when a page break needs to occur
+	 *
 	 * @return boolean
 	 */
 	public function AcceptPageBreak()
@@ -480,6 +480,7 @@ class ElkPdf extends tFPDF
 	 * Given an image URL simply load its data to memory
 	 *
 	 * @param string $name
+	 * @return string '' if no path extension found
 	 */
 	private function _fetch_image($name)
 	{
@@ -489,10 +490,17 @@ class ElkPdf extends tFPDF
 
 		// Local file or remote?
 		$pathinfo = pathinfo($name);
-		if ((strpos($name, $boardurl) !== false && in_array($pathinfo['extension'], $this->_validImageTypes)) || $pathinfo['extension'] == 'gal')
+
+		// Not going to look then
+		if (!isset($pathinfo['extension']))
+		{
+			return '';
+		}
+
+		if ((strpos($name, $boardurl) !== false && in_array($pathinfo['extension'], $this->_validImageTypes)) || $pathinfo['extension'] === 'gal')
 		{
 			// Gallery image?
-			if ($pathinfo['extension'] == 'gal')
+			if ($pathinfo['extension'] === 'gal')
 				$name = substr($name, 0, -4);
 
 			$this->image_data = file_get_contents(str_replace($boardurl, BOARDDIR, $name));
@@ -510,6 +518,8 @@ class ElkPdf extends tFPDF
 	 *
 	 * @param int $width in px
 	 * @param int $height in px
+	 *
+	 * @return array (width, height)
 	 */
 	private function _scale_image($width, $height)
 	{
@@ -718,6 +728,7 @@ class ElkPdf extends tFPDF
 	 * Conversion pixel -> millimeter at 96 dpi
 	 *
 	 * @param int $px
+	 * @return float
 	 */
 	private function _px2mm($px)
 	{
@@ -728,6 +739,7 @@ class ElkPdf extends tFPDF
 	 * Conversion millimeter -> pixel at 96 dpi
 	 *
 	 * @param int $mm
+	 * @return float
 	 */
 	private function _mm2px($mm)
 	{
@@ -781,9 +793,8 @@ class VariableStream
 	 * Callback for fopen()
 	 *
 	 * @param string $path
-	 * @param string $mode
-	 * @param int $options
-	 * @param string $opened_path
+	 *
+	 * @return boolean
 	 */
 	public function stream_open($path)
 	{
@@ -798,6 +809,7 @@ class VariableStream
 	 * Callback for fread()
 	 *
 	 * @param int $count
+	 * @return string
 	 */
 	public function stream_read($count)
 	{
@@ -814,6 +826,7 @@ class VariableStream
 	 * Callback for fwrite()
 	 *
 	 * @param string $data
+	 * @return int
 	 */
 	public function stream_write($data)
 	{
@@ -848,6 +861,8 @@ class VariableStream
 	 *
 	 * @param int $offset
 	 * @param int $whence
+	 *
+	 * @return boolean
 	 */
 	public function stream_seek($offset, $whence)
 	{
