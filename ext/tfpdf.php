@@ -2,13 +2,13 @@
 /*******************************************************************************
 * tFPDF (based on FPDF 1.7)                                                    *
 *                                                                              *
-* Version:  1.24                                                               *
+* Version:  1.25                                                               *
 * Date:     2011-09-24                                                         *
 * Author:   Ian Back <ianb@bpm1.com>                                           *
 * License:  LGPL                                                               *
 *******************************************************************************/
 
-define('tFPDF_VERSION','1.24');
+define('tFPDF_VERSION','1.25');
 
 class tFPDF
 {
@@ -76,7 +76,7 @@ var $PDFVersion;         // PDF version number
 *                               Public methods                                 *
 *                                                                              *
 *******************************************************************************/
-function tFPDF($orientation='P', $unit='mm', $size='A4')
+function __construct($orientation='P', $unit='mm', $size='A4')
 {
 	// Some checks
 	$this->_dochecks();
@@ -582,7 +582,6 @@ function AddFont($family, $style='', $file='', $uni=false)
 		}
 		$this->fonts[$fontkey] = $info;
 	}
-var_dump($this->fonts);
 }
 
 function SetFont($family, $style='', $size=0)
