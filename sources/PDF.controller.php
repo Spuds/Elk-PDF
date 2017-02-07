@@ -5,7 +5,7 @@
  * @author Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.2
+ * @version 1.0.3
  *
  */
 
@@ -44,7 +44,7 @@ class PDF_Controller extends Action_Controller
 			redirectexit();
 
 		// You have to be able to print to create PDF's
-		if (!empty($modSettings['disable_print_topic']))
+		if (!empty($modSettings['disable_print_topic']) || !allowedTo('send_topic'))
 		{
 			unset($_REQUEST['action']);
 			$context['theme_loaded'] = false;
@@ -137,6 +137,7 @@ class PDF_Controller extends Action_Controller
 		$pdf->AddFont('DejaVu', '', 'DejaVuSerifCondensed.ttf', true);
 		$pdf->AddFont('DejaVu', 'B', 'DejaVuSerifCondensed-Bold.ttf', true);
 		$pdf->AddFont('DejaVu', 'I', 'DejaVuSerifCondensed-Italic.ttf', true);
+		$pdf->AddFont('DejaVu', 'BI', 'DejaVuSerifCondensed-BoldItalic.ttf', true);
 
 		// Start the first page and auto page counter
 		$pdf->AliasNbPages('{elk_nb}');
