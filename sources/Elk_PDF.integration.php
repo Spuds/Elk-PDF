@@ -5,7 +5,7 @@
  * @author Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0
+ * @version 1.0.3
  *
  */
 
@@ -22,5 +22,12 @@ function idb_elk2pdf()
 	global $context, $scripturl;
 
 	// Replace the print action with PDF
-	$context['normal_buttons']['print'] = array('test' => 'can_print', 'text' => 'print', 'image' => 'print.png', 'lang' => true, 'custom' => 'rel="nofollow"', 'class' => 'new_win', 'url' => $scripturl . '?action=PDF;topic=' . $context['current_topic'] . '.0');
+	$context['normal_buttons']['print'] = array(
+		'test' => 'can_print',
+		'text' => 'print',
+		'image' => 'print.png',
+		'lang' => true,
+		'custom' => 'rel="nofollow"',
+		'class' => 'new_win',
+		'url' => $scripturl . '?action=PDF;topic=' . $context['current_topic'] . '.0');
 }
