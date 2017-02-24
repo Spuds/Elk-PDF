@@ -117,7 +117,6 @@ class ElkPdf extends tFPDF
 		// Gallerys are kind of special, see this function on one way to deal with them
 		// $this->_prepare_gallery();
 
-		// Get whats left
 		$this->html = $this->doc->save();
 
 		// Clean it up for proper printing
@@ -434,7 +433,7 @@ class ElkPdf extends tFPDF
 			}
 
 			// Set the type based on what was loaded
-			$attr['type'] = $this->_validImageTypes[$this->image_info[2]];
+			$attr['type'] = $this->_validImageTypes[(int) $this->image_info[2]];
 
 			// If no specific width/height was on the image tag, check if its in the style
 			if (isset($attr['style']) && (!isset($attr['width']) && !isset($attr['height'])))
