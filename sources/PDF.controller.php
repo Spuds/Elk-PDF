@@ -120,88 +120,109 @@ class PDF_Controller extends Action_Controller
 		require_once(EXTDIR . '/tfpdf.php');
 		require_once(SUBSDIR . '/Elk_PDF.class.php');
 
-		// Portrait, millimeter, page size (Letter, A4, etc)
-		$pdf = new ElkPdf('P', 'mm', $modSettings['pdf_page']);
-
-		// Stream handle for external images
-		stream_wrapper_register("elkimg", "VariableStream");
-
-		// Common page setup
-		$pdf->SetAuthor($forum_version);
-		$pdf->SetTitle($mbname);
-		$pdf->SetSubject($context['topic_subject']);
-		$pdf->SetMargins($modSettings['pdf_wmargin'], $modSettings['pdf_hmargin']);
-		$pdf->SetLineWidth(.1);
-
-		// Fonts we will or may use
-		$pdf->AddFont('DejaVu', '', 'DejaVuSerifCondensed.ttf', true);
-		$pdf->AddFont('DejaVu', 'B', 'DejaVuSerifCondensed-Bold.ttf', true);
-		$pdf->AddFont('DejaVu', 'I', 'DejaVuSerifCondensed-Italic.ttf', true);
-		$pdf->AddFont('DejaVu', 'BI', 'DejaVuSerifCondensed-BoldItalic.ttf', true);
-
-		// Start the first page and auto page counter
-		$pdf->AliasNbPages('{elk_nb}');
-		$pdf->begin_page($context['topic_subject']);
-
-		// On to the posts for this topic
-		$count = 0;
-		foreach ($context['posts'] as $post)
+		try
 		{
-			// Write message header
-			$pdf->message_header(html_entity_decode($post['subject']), html_entity_decode($post['member']), $post['time']);
+			// Portrait, millimeter, page size (Letter, A4, etc)
+			$pdf = new ElkPdf('P', 'mm', $modSettings['pdf_page']);
 
-			// Handle polls.
-			if (!empty($context['poll']) && empty($count))
-				$pdf->add_poll(html_entity_decode($context['poll']['question']), $context['poll']['options'], $context['allow_poll_view']);
+			// Stream handle for external images
+			stream_wrapper_register("elkimg", "VariableStream");
 
-			// Write message body.
-			$pdf->write_html(preg_replace_callback('~(&#(\d{1,7}|x[0-9a-fA-F]{1,6});)~', 'fixchar__callback', $post['body']));
+			// Common page setup
+			$pdf->SetAuthor($forum_version);
+			$pdf->SetTitle($mbname);
+			$pdf->SetSubject($context['topic_subject']);
+			$pdf->SetMargins($modSettings['pdf_wmargin'], $modSettings['pdf_hmargin']);
+			$pdf->SetLineWidth(.1);
 
-			// Show attachment images
-			if (!empty($context['printattach'][$post['id_msg']]))
-				$pdf->add_attachments($context['printattach'][$post['id_msg']]);
+			// Fonts we will or may use
+			$pdf->AddFont('DejaVu', '', 'DejaVuSerifCondensed.ttf', true);
+			$pdf->AddFont('DejaVu', 'B', 'DejaVuSerifCondensed-Bold.ttf', true);
+			$pdf->AddFont('DejaVu', 'I', 'DejaVuSerifCondensed-Italic.ttf', true);
+			$pdf->AddFont('DejaVu', 'BI', 'DejaVuSerifCondensed-BoldItalic.ttf', true);
+			$pdf->AddFont('OpenSans', '', 'OpenSans-Regular.ttf', true);
+			$pdf->AddFont('OpenSans', 'B', 'OpenSans-Bold.ttf', true);
+			$pdf->AddFont('OpenSans', 'I', 'OpenSans-Italic.ttf', true);
+			$pdf->AddFont('OpenSans', 'BI', 'OpenSans-BoldItalic.ttf', true);
 
-			$pdf->end_message();
-			$count++;
-		}
+			// Start the first page and auto page counter
+			$pdf->AliasNbPages('{elk_nb}');
+			$pdf->begin_page($context['topic_subject']);
 
-		// Make sure we can send
-		if (!headers_sent($filename, $linenum))
-		{
-			// Clear anything in the buffers
-			while (@ob_get_level() > 0)
-				@ob_end_clean();
+			// On to the posts for this topic
+			$count = 0;
+			foreach ($context['posts'] as $post)
+			{
+				// Write message header
+				$pdf->message_header(html_entity_decode($post['subject']), html_entity_decode($post['member']), $post['time']);
 
-			// Get the PDF output
-			$out = $pdf->Output('ElkArte' . date('Ymd') . '.pdf', 'S');
+				// Handle polls.
+				if (!empty($context['poll']) && empty($count))
+				{
+					$pdf->add_poll(html_entity_decode($context['poll']['question']), $context['poll']['options'], $context['allow_poll_view']);
+				}
 
-			// Set the output compression
-			if (!empty($modSettings['enableCompressedOutput']) && strlen($out) <= 4194304)
-				ob_start('ob_gzhandler');
+				// Write message body.
+				$pdf->write_html(preg_replace_callback('~(&#(\d{1,7}|x[0-9a-fA-F]{1,6});)~', 'fixchar__callback', $post['body']));
+
+				// Show attachment images
+				if (!empty($context['printattach'][$post['id_msg']]))
+				{
+					$pdf->add_attachments($context['printattach'][$post['id_msg']]);
+				}
+
+				$pdf->end_message();
+				$count++;
+			}
+
+			// Make sure we can send
+			if (!headers_sent($filename, $linenum))
+			{
+				// Clear anything in the buffers
+				while (@ob_get_level() > 0)
+				{
+					@ob_end_clean();
+				}
+
+				// Get the PDF output
+				$out = $pdf->Output('ElkArte' . date('Ymd') . '.pdf', 'S', true);
+
+				// Set the output compression
+				if (!empty($modSettings['enableCompressedOutput']) && strlen($out) <= 4194304)
+				{
+					ob_start('ob_gzhandler');
+				}
+				else
+				{
+					ob_start();
+					header('Content-Encoding: none');
+				}
+
+				// Output content to browser
+				header('Content-Type: application/pdf');
+
+				if ($_SERVER['SERVER_PORT'] == '443' && (strpos($_SERVER['HTTP_USER_AGENT'], 'MSIE') !== false))
+				{
+					header('Cache-Control: must-revalidate, post-check=0, pre-check=0', true);
+					header('Pragma: public', true);
+				}
+
+				header('Content-Length: ' . strlen($out));
+				header('Content-disposition: inline; filename=ElkForum' . date('Ymd') . '.pdf');
+
+				echo $out;
+
+				// Just exit now
+				obExit(false);
+			}
 			else
 			{
-				ob_start();
-				header('Content-Encoding: none');
+				echo "Headers already sent in $filename on line $linenum";
 			}
-
-			// Output content to browser
-			header('Content-Type: application/pdf');
-
-			if ($_SERVER['SERVER_PORT'] == '443' && (strpos($_SERVER['HTTP_USER_AGENT'], 'MSIE') !== false))
-			{
-				header('Cache-Control: must-revalidate, post-check=0, pre-check=0', true);
-				header('Pragma: public', true);
-			}
-
-			header('Content-Length: ' . strlen($out));
-			header('Content-disposition: inline; filename=ElkForum' . date('Ymd') . '.pdf');
-
-			echo $out;
-
-			// Just exit now
-			obExit(false);
 		}
-		else
-			echo "Headers already sent in $filename on line $linenum";
+		catch(Exception $e)
+		{
+			fatal_error($e->getMessage(), false);
+		}
 	}
 }
