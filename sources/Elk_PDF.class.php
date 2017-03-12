@@ -388,6 +388,8 @@ class ElkPdf extends tFPDF
 		$this->Ln($this->line_height);
 		$this->_draw_line();
 		$this->Ln(2);
+		$this->AutoPageBreak = false;
+		$this->image_line = 0;
 
 		foreach ($attach as $a)
 		{
@@ -411,31 +413,37 @@ class ElkPdf extends tFPDF
 			// Its an image type fPDF understands
 			if (!empty($type))
 			{
-				// If the image is to wide to fix, scale it
+				// Scale to fit in our grid as required
 				list($a['width'], $a['height']) = $this->_scale_image($a['width'], $a['height']);
 
 				// Does it fit on this row
-				$this->image_line += $a['width'] + $this->line_height;
-				if ($this->image_line > $this->page_width)
+				$this->image_line += $a['width'];
+
+				if ($this->image_line >= $this->page_width)
 				{
 					// New row, move the cursor down to the next row based on the tallest image
-					$this->image_line = 0;
 					$this->Ln($this->image_height + $this->line_height);
 					$this->image_height = 0;
+					$this->image_line = 0;
 				}
 
 				// Does it fit on this page, or is a new one needed?
-				if ($this->y + $a['height'] > $this->page_height)
+				if ($this->y + $a['height'] > $this->PageBreakTrigger)
 				{
 					$this->AddPage();
+					$this->image_height = 0;
+					$this->image_line = 0;
 				}
 
 				$this->image_height = max($this->image_height, $a['height']);
-				$this->Cell($a['width'] + $this->line_height, $a['height'] + $this->line_height, $this->Image($a['filename'], $this->GetX(), $this->GetY(), $a['width'], $a['height'], $type), 0, 0, 'L', false);
+				$this->Cell($a['width'] + $this->_px2mm($this->rMargin), $a['height'] + $this->_px2mm($this->tMargin), $this->Image($a['filename'], $this->GetX(), $this->GetY(), $a['width'], $a['height'], $type), 0, 0, 'L', false);
+				$this->image_line += $this->_px2mm($this->rMargin);
 			}
 		}
 
 		// Last image, move the cursor position to the next row
+		$this->AutoPageBreak = true;
+
 		if (isset($a['height']))
 		{
 			$this->Ln(max($this->image_height, $a['height']));
@@ -504,7 +512,7 @@ class ElkPdf extends tFPDF
 			list($thumbwidth, $thumbheight) = $this->_scale_image($attr['width'], $attr['height']);
 
 			// Does it fit on this page, or is a new one needed?
-			if ($this->y + $thumbheight > $this->page_height)
+			if ($this->y + $thumbheight > $this->PageBreakTrigger)
 			{
 				$this->AddPage();
 			}
@@ -573,21 +581,23 @@ class ElkPdf extends tFPDF
 		// Normalize to page units
 		$width = $this->_px2mm($width);
 		$height = $this->_px2mm($height);
+		$across = 2;
+		$down = 2;
 
 		// Max width and height
-		$max_width = $this->page_width / 2 - $this->line_height;
-		$max_height = $this->page_height / 2 - $this->line_height;
+		$max_width = $this->page_width / $across - $this->_px2mm(($across - 1) * $this->rMargin);
+		$max_height = $this->page_height / $down - $this->_px2mm(($down - 1) * $this->tMargin);
 
 		// Some scaling may be needed, does the image even fit on a page?
 		if ($max_width < $width && $width >= $height)
 		{
 			$thumbwidth = $max_width;
-			$thumbheight = ($thumbwidth / $width) * $height;
+			$thumbheight = ($max_width / $width) * $height;
 		}
 		elseif ($max_height < $height && $height >= $width)
 		{
 			$thumbheight = $max_height;
-			$thumbwidth = ($thumbheight / $height) * $width;
+			$thumbwidth = ($max_height / $height) * $width;
 		}
 		else
 		{
@@ -595,7 +605,7 @@ class ElkPdf extends tFPDF
 			$thumbwidth = $width;
 		}
 
-		return array(round($thumbwidth, 0), round($thumbheight, 0));
+		return array(ceil($thumbwidth), ceil($thumbheight));
 	}
 
 	/**
@@ -717,14 +727,14 @@ class ElkPdf extends tFPDF
 	 */
 	public function footer()
 	{
-		global $scripturl, $topic, $mbname, $txt;
+		global $scripturl, $topic, $mbname, $txt, $context;
 
 		$this->SetFont($this->font_face, '', 8);
 		$this->Ln($this->line_height);
 		$this->_draw_line();
-		$this->Write($this->line_height, $txt['page'] . ' ' . $this->page . ' / {elk_nb} ---- ' . $txt['topic'] . ' ' . $txt['link'] . ': ');
+		$this->Write($this->line_height, $txt['page'] . ' ' . $this->page . ' / {elk_nb} ---- ' . html_entity_decode(htmlspecialchars_decode($mbname)) . ' ' . $txt['topic'] . ' ' . $txt['link'] . ': ');
 		$this->in_quote++;
-		$this->_add_link($scripturl . '?topic=' . $topic, $mbname);
+		$this->_add_link($scripturl . '?topic=' . $topic, $context['topic_subject']);
 		$this->in_quote--;
 	}
 
