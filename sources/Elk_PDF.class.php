@@ -48,6 +48,8 @@ class ElkPdf extends tFPDF
 	var $image_data;
 	// holds results of getimagesize
 	var $image_info;
+	// Primary font face to use in the PDF, 'DejaVu' or 'OpenSans'
+	var $font_face = 'OpenSans';
 
 	/**
 	 * Converts a block of HTML to appropriate fPDF commands
@@ -61,10 +63,11 @@ class ElkPdf extends tFPDF
 		$this->_prepare_html();
 
 		// Set the default font family
-		$this->SetFont('DejaVu', '', 10);
+		$this->SetFont($this->font_face, '', 10);
 
 		// Split up all the tags
 		$a = preg_split('~<(.*?)>~', $this->html, -1, PREG_SPLIT_DELIM_CAPTURE);
+
 		foreach ($a as $i => $e)
 		{
 			// Between the tags, is the text
@@ -110,6 +113,9 @@ class ElkPdf extends tFPDF
 		// Up front, remove whitespace between html tags
 		$this->html = preg_replace('/(?:(?<=\>)|(?<=\/\>))(\s+)(?=\<\/?)/', '', $this->html);
 
+		// Add "tabs" for the code blocks
+		$this->html = str_replace('<span class="tab"></span>', '    ', $this->html);
+
 		// The external lib is easier to use for class searches
 		require_once(EXTDIR . '/simple_html_dom.php');
 		$this->doc = str_get_html($this->html, true, true, 'UTF-8', false);
@@ -152,7 +158,7 @@ class ElkPdf extends tFPDF
 				break;
 			case 'blockquote':
 				$this->_elk_set_text_color(100, 100, 45);
-				$this->SetFont('DejaVu', '', 8);
+				$this->SetFont($this->font_face, '', 8);
 				$this->Ln(4);
 				break;
 			case 'i':
@@ -190,7 +196,7 @@ class ElkPdf extends tFPDF
 					if ($this->in_quote == 0)
 					{
 						$this->quote_start_y = $this->GetY();
-						$this->SetFont('DejaVu', '', 8);
+						$this->SetFont($this->font_face, '', 8);
 					}
 
 					// Keep track of quote depth so they are indented
@@ -226,7 +232,7 @@ class ElkPdf extends tFPDF
 		{
 			// Closing tag
 			case 'pre':
-				$this->SetFont('DejaVu', '', 10);
+				$this->SetFont($this->font_face, '', 10);
 				break;
 			case 'blockquote':
 				$this->in_quote--;
@@ -234,7 +240,7 @@ class ElkPdf extends tFPDF
 
 				if ($this->in_quote == 0)
 				{
-					$this->SetFont('DejaVu', '', 10);
+					$this->SetFont($this->font_face, '', 10);
 					$this->_elk_set_text_color(0, 0, 0);
 					$this->SetFillColor(0, 0, 0);
 					$this->_draw_box();
@@ -302,9 +308,9 @@ class ElkPdf extends tFPDF
 		// Underline blue text for links
 		$this->SetTextColor(0, 0, 255);
 		$this->_set_style('u', true);
-		$this->SetFont('DejaVu', '', ($this->in_quote ? 8 : 10));
+		$this->SetFont($this->font_face, '', ($this->in_quote ? 8 : 10));
 		$this->Write($this->line_height, $caption ? $caption : ' ', $url);
-		$this->SetFont('DejaVu', '', 10);
+		$this->SetFont($this->font_face, '', 10);
 		$this->_set_style('u', false);
 		$this->SetTextColor(-1);
 	}
@@ -559,22 +565,22 @@ class ElkPdf extends tFPDF
 
 		// The question
 		$this->Ln(2);
-		$this->SetFont('DejaVu', '', 10);
+		$this->SetFont($this->font_face, '', 10);
 		$this->Write($this->line_height, $txt['poll_question'] . ': ');
-		$this->SetFont('DejaVu', 'B', 10);
+		$this->SetFont($this->font_face, 'B', 10);
 		$this->Write($this->line_height, $name);
-		$this->SetFont('DejaVu', '', 10);
+		$this->SetFont($this->font_face, '', 10);
 		$this->Ln($this->line_height);
 
 		// Choices with vote count
 		$print_options = 1;
 		foreach ($options as $option)
 		{
-			$this->SetFont('DejaVu', '', 10);
+			$this->SetFont($this->font_face, '', 10);
 			$this->Write($this->line_height, $txt['option'] . ' ' . $print_options++ . ' » ');
-			$this->SetFont('DejaVu', 'B', 10);
+			$this->SetFont($this->font_face, 'B', 10);
 			$this->Write($this->line_height, $option['option']);
-			$this->SetFont('DejaVu', '', 10);
+			$this->SetFont($this->font_face, '', 10);
 
 			if ($allowed_view_votes)
 				$this->Write($this->line_height, ' (' . $txt['votes'] . ': ' . $option['votes'] . ')');
@@ -604,20 +610,20 @@ class ElkPdf extends tFPDF
 
 		// Subject
 		$this->_draw_line();
-		$this->SetFont('DejaVu', '', 8);
+		$this->SetFont($this->font_face, '', 8);
 		$this->Write($this->line_height, $txt['title'] . ': ');
-		$this->SetFont('DejaVu', 'B', 9);
+		$this->SetFont($this->font_face, 'B', 9);
 		$this->Write($this->line_height, $subject);
 		$this->Ln(4);
 
 		// Posted by and time
-		$this->SetFont('DejaVu', '', 8);
+		$this->SetFont($this->font_face, '', 8);
 		$this->Write($this->line_height, $txt['post_by'] . ': ');
-		$this->SetFont('DejaVu', 'B', 9);
+		$this->SetFont($this->font_face, 'B', 9);
 		$this->Write($this->line_height, $author . ' ');
-		$this->SetFont('DejaVu', '', 8);
+		$this->SetFont($this->font_face, '', 8);
 		$this->Write($this->line_height, $txt['search_on'] . ' ');
-		$this->SetFont('DejaVu', 'B', 9);
+		$this->SetFont($this->font_face, 'B', 9);
 		$this->Write($this->line_height, $date);
 
 		$this->Ln($this->line_height);
@@ -643,7 +649,7 @@ class ElkPdf extends tFPDF
 		$linktree = $context['category_name'] . ' » ' . (!empty($context['parent_boards']) ? implode(' » ', $context['parent_boards']) . ' » ' : '') . $context['board_name'] . ' » ' . $txt['topic_started'] . ': ' . $context['poster_name'] . ' ' . $txt['search_on'] . ' ' . $context['post_time'];
 
 		// Print the linktree followed by a solid bar
-		$this->SetFont('DejaVu', '', 9);
+		$this->SetFont($this->font_face, '', 9);
 		$this->_elk_set_text_color(0, 0, 0);
 		$this->SetFillColor(0, 0, 0);
 		$this->Write($this->line_height, $linktree);
@@ -656,7 +662,7 @@ class ElkPdf extends tFPDF
 		{
 			$this->quote_start_y = $this->y;
 			$this->_elk_set_text_color(100, 100, 45);
-			$this->SetFont('DejaVu', '', 8);
+			$this->SetFont($this->font_face, '', 8);
 		}
 	}
 
@@ -667,7 +673,7 @@ class ElkPdf extends tFPDF
 	{
 		global $scripturl, $topic, $mbname, $txt;
 
-		$this->SetFont('DejaVu', '', 8);
+		$this->SetFont($this->font_face, '', 8);
 		$this->Ln($this->line_height);
 		$this->_draw_line();
 		$this->Write($this->line_height, $txt['page'] . ' ' . $this->page . ' / {elk_nb} ---- ' . $txt['topic'] . ' ' . $txt['link'] . ': ');
@@ -710,12 +716,12 @@ class ElkPdf extends tFPDF
 	private function _set_style($tag, $enable)
 	{
 		// Keep track of the style depth / nesting
-		$this->$tag += ($enable ? 1 : -1);
+		$this->{$tag} += ($enable ? 1 : -1);
 
 		$style = '';
 		foreach (array('b', 'i', 'u') as $s)
 		{
-			if ($this->$s > 0)
+			if ($this->{$s} > 0)
 				$style .= $s;
 		}
 
