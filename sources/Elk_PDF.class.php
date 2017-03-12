@@ -5,12 +5,14 @@
  * @author Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.3
+ * @version 1.0.4
  *
  */
 
 if (!defined('ELK'))
+{
 	die('No access...');
+}
 
 class ElkPdf extends tFPDF
 {
@@ -75,16 +77,22 @@ class ElkPdf extends tFPDF
 			{
 				// Text or link text?
 				if ($this->_href)
+				{
 					$this->_add_link($this->_href, $e);
+				}
 				elseif (!empty($e))
+				{
 					$this->Write($this->line_height, $e);
+				}
 			}
 			// HTML Tag
 			else
 			{
 				// Ending Tag?
 				if ($e[0] === '/')
-					$this->_close_tag(trim(substr($e,1)));
+				{
+					$this->_close_tag(trim(substr($e, 1)));
+				}
 				else
 				{
 					// Opening Tag
@@ -96,7 +104,9 @@ class ElkPdf extends tFPDF
 					foreach ($a2 as $value)
 					{
 						if (preg_match('~([^=]*)=["\']?([^"\']*)~', $value, $a3))
+						{
 							$attr[strtolower($a3[1])] = $a3[2];
+						}
 					}
 
 					$this->_open_tag($tag, $attr);
@@ -183,11 +193,15 @@ class ElkPdf extends tFPDF
 			case 'br':
 			case 'p':
 				if (!$this->_first_node)
+				{
 					$this->Ln($this->line_height);
+				}
 				break;
 			case 'div':
 				if (!$this->_first_node)
+				{
 					$this->Ln($this->line_height);
+				}
 
 				// If its the start of a quote block
 				if (isset($attr['class']) && $attr['class'] === 'quoteheader')
@@ -284,7 +298,9 @@ class ElkPdf extends tFPDF
 	{
 		// If in a quote block, close the current outline box
 		if ($this->in_quote > 0)
+		{
 			$this->Rect($this->lMargin, $this->quote_start_y, ($this->w - $this->rMargin - $this->lMargin), ($this->h - $this->quote_start_y - $this->bMargin), 'D');
+		}
 
 		return $this->AutoPageBreak;
 	}
@@ -331,7 +347,9 @@ class ElkPdf extends tFPDF
 		// Remove extra markup not needed
 		$elements = $this->doc->find('div.caption');
 		foreach ($elements as $node)
+		{
 			$node->outertext = '';
+		}
 
 		// All the gallery links
 		$elements = $this->doc->find('table.aextbox td a');
@@ -341,12 +359,18 @@ class ElkPdf extends tFPDF
 			$type = 'preview';
 			$id = '';
 			if (preg_match('~.*in=(\d+).*~', $node->href, $match))
+			{
 				$id = (int) $match[1];
+			}
 
 			if (empty($id) || !aeva_allowedTo('access'))
+			{
 				$path = $settings['theme_dir'] . '/images/aeva/denied.png';
+			}
 			else
+			{
 				list($path, ,) = aeva_getMediaPath($id, $type);
+			}
 
 			// Set the image src to the file location so it can be fetched.
 			$node->parent()->outertext = '<img src="' . (!empty($path) ? $path : $settings['theme_dir'] . '/images/aeva/denied.png') . '.gal">';
@@ -402,16 +426,20 @@ class ElkPdf extends tFPDF
 
 				// Does it fit on this page, or is a new one needed?
 				if ($this->y + $a['height'] > $this->page_height)
+				{
 					$this->AddPage();
+				}
 
 				$this->image_height = max($this->image_height, $a['height']);
-				$this->Cell($a['width'] + $this->line_height, $a['height'] + $this->line_height, $this->Image($a['filename'], $this->GetX(), $this->GetY(), $a['width'], $a['height'], $type), 0, 0, 'L', false );
+				$this->Cell($a['width'] + $this->line_height, $a['height'] + $this->line_height, $this->Image($a['filename'], $this->GetX(), $this->GetY(), $a['width'], $a['height'], $type), 0, 0, 'L', false);
 			}
 		}
 
 		// Last image, move the cursor position to the next row
 		if (isset($a['height']))
+		{
 			$this->Ln(max($this->image_height, $a['height']));
+		}
 	}
 
 	/**
@@ -446,9 +474,13 @@ class ElkPdf extends tFPDF
 			{
 				// Extract the style width and height
 				if (preg_match('~.*?width:(\d+)px.*?~', $attr['style'], $matches))
+				{
 					$attr['width'] = $matches[1];
+				}
 				if (preg_match('~.*?height:(\d+)px.*?~', $attr['style'], $matches))
+				{
 					$attr['height'] = $matches[1];
+				}
 			}
 
 			// No size set that we can find, so just use the image size
@@ -459,17 +491,23 @@ class ElkPdf extends tFPDF
 			}
 			// Maybe a width but no height, square is good
 			elseif (!empty($attr['width']) && empty($attr['height']))
+			{
 				$attr['height'] = $attr['width'];
+			}
 			// Maybe a height but no width, square is dandy
 			elseif (empty($attr['width']) && !empty($attr['height']))
+			{
 				$attr['width'] = $attr['height'];
+			}
 
 			// Some scaling may be needed, does the image even fit on a page?
 			list($thumbwidth, $thumbheight) = $this->_scale_image($attr['width'], $attr['height']);
 
 			// Does it fit on this page, or is a new one needed?
 			if ($this->y + $thumbheight > $this->page_height)
+			{
 				$this->AddPage();
+			}
 
 			// Use our stream wrapper since we have the data in memory
 			$elkimg = 'img' . md5($this->image_data);
@@ -506,12 +544,16 @@ class ElkPdf extends tFPDF
 		{
 			// Gallery image?
 			if ($pathinfo['extension'] === 'gal')
+			{
 				$name = substr($name, 0, -4);
+			}
 
 			$this->image_data = file_get_contents(str_replace($boardurl, BOARDDIR, $name));
 		}
 		else
+		{
 			$this->image_data = fetch_web_data($name);
+		}
 
 		// Image size and type
 		$this->image_info = @getimagesizefromstring($this->image_data);
@@ -583,7 +625,9 @@ class ElkPdf extends tFPDF
 			$this->SetFont($this->font_face, '', 10);
 
 			if ($allowed_view_votes)
+			{
 				$this->Write($this->line_height, ' (' . $txt['votes'] . ': ' . $option['votes'] . ')');
+			}
 
 			$this->Ln($this->line_height);
 		}
@@ -606,7 +650,9 @@ class ElkPdf extends tFPDF
 
 		// Make sure the head stays with the body
 		if ($this->y + 4 > $this->page_height)
+		{
 			$this->AddPage();
+		}
 
 		// Subject
 		$this->_draw_line();
@@ -695,7 +741,9 @@ class ElkPdf extends tFPDF
 
 		// Repeat the current color
 		if ($r == -1)
+		{
 			$this->SetTextColor($_r, $_g, $_b);
+		}
 		// Or set a new one
 		else
 		{
@@ -722,7 +770,9 @@ class ElkPdf extends tFPDF
 		foreach (array('b', 'i', 'u') as $s)
 		{
 			if ($this->{$s} > 0)
+			{
 				$style .= $s;
+			}
 		}
 
 		// Set / un-set the style
@@ -819,7 +869,9 @@ class VariableStream
 	public function stream_read($count)
 	{
 		if (!isset($GLOBALS[$this->varname]))
+		{
 			return '';
+		}
 
 		$ret = substr($GLOBALS[$this->varname], $this->position, $count);
 		$this->position += strlen($ret);
@@ -836,9 +888,13 @@ class VariableStream
 	public function stream_write($data)
 	{
 		if (!isset($GLOBALS[$this->varname]))
+		{
 			$GLOBALS[$this->varname] = $data;
+		}
 		else
+		{
 			$GLOBALS[$this->varname] = substr_replace($GLOBALS[$this->varname], $data, $this->position, strlen($data));
+		}
 
 		$this->position += strlen($data);
 
@@ -877,21 +933,33 @@ class VariableStream
 		{
 			case SEEK_SET:
 				if ($offset < strlen($GLOBALS[$this->varname]) && $offset >= 0)
+				{
 					$this->position = $offset;
+				}
 				else
+				{
 					$result = false;
+				}
 				break;
 			case SEEK_CUR:
 				if ($offset >= 0)
+				{
 					$this->position += $offset;
+				}
 				else
+				{
 					$result = false;
+				}
 				break;
 			case SEEK_END:
 				if (strlen($GLOBALS[$this->varname]) + $offset >= 0)
+				{
 					$this->position = strlen($GLOBALS[$this->varname]) + $offset;
+				}
 				else
+				{
 					$result = false;
+				}
 				break;
 			default:
 				$result = false;

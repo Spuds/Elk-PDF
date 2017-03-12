@@ -5,12 +5,14 @@
  * @author Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.3
+ * @version 1.0.4
  *
  */
 
 if (!defined('ELK'))
+{
 	die('No access...');
+}
 
 /**
  * integrate_display_buttons hook, called from Display.controller

@@ -5,12 +5,14 @@
  * @author Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.3
+ * @version 1.0.4
  *
  */
 
 if (!defined('ELK'))
+{
 	die('No access...');
+}
 
 /**
  * PDF Controller
@@ -41,7 +43,9 @@ class PDF_Controller extends Action_Controller
 
 		// Redirect to the boardindex if no valid topic id is provided.
 		if (empty($topic))
+		{
 			redirectexit();
+		}
 
 		// You have to be able to print to create PDF's
 		if (!empty($modSettings['disable_print_topic']) || !allowedTo('send_topic'))
@@ -61,7 +65,9 @@ class PDF_Controller extends Action_Controller
 
 		// Redirect to the boardindex if no valid topic id is provided.
 		if (empty($topicinfo))
+		{
 			redirectexit();
+		}
 
 		// If the topic has poll's lets load those in
 		if ($topicinfo['id_poll'] > 0 && !empty($modSettings['pollMode']) && allowedTo('poll_view'))
@@ -80,7 +86,9 @@ class PDF_Controller extends Action_Controller
 		$context['parent_boards'] = array();
 
 		foreach ($board_info['parent_boards'] as $parent)
+		{
 			$context['parent_boards'][] = $parent['name'];
+		}
 
 		// Get all the messages in this topic
 		$_GET['images'] = true;
@@ -108,7 +116,9 @@ class PDF_Controller extends Action_Controller
 		global $modSettings, $forum_version, $mbname, $context;
 
 		if (empty($modSettings['pdf_page']))
+		{
 			$modSettings['pdf_page'] = 'letter';
+		}
 
 		$modSettings['pdf_wmargin'] = 15;
 		$modSettings['pdf_hmargin'] = 15;
@@ -220,7 +230,7 @@ class PDF_Controller extends Action_Controller
 				echo "Headers already sent in $filename on line $linenum";
 			}
 		}
-		catch(Exception $e)
+		catch (Exception $e)
 		{
 			fatal_error($e->getMessage(), false);
 		}

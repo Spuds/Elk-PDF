@@ -1,4 +1,4 @@
-##Print to PDF Version 1.0.3
+##Print to PDF Version 1.0.4
 
 ##License
 This Elkarte addon is released under a [BSD-3-Clause](http://opensource.org/licenses/BSD-3-Clause) license.
@@ -7,7 +7,7 @@ This Elkarte addon is released under a [BSD-3-Clause](http://opensource.org/lice
 This addon replaces the print button action to instead create a PDF of the topic for viewing / saving.
 
 ##Dependencies
-Utilizes tFPDF (based on FPDF 1.7) by Ian Back, License:  LGPL    
+Utilizes tFPDF (based on FPDF 1.7) by Ian Back, License:  LGPL
 
 ##Features
   - One-click creation of topic PDF's
