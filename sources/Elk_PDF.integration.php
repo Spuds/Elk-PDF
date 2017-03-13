@@ -21,12 +21,14 @@ if (!defined('ELK'))
  */
 function idb_elk2pdf()
 {
-	global $context, $scripturl;
+	global $context, $scripturl, $txt;
+
+	$txt['pdf'] = 'PDF';
 
 	// Replace the print action with PDF
 	$context['normal_buttons']['print'] = array(
 		'test' => 'can_print',
-		'text' => 'print',
+		'text' => 'pdf',
 		'image' => 'print.png',
 		'lang' => true,
 		'custom' => 'rel="nofollow"',
