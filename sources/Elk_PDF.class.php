@@ -52,6 +52,8 @@ class ElkPdf extends tFPDF
 	var $image_info;
 	// Primary font face to use in the PDF, 'DejaVu' or 'OpenSans'
 	var $font_face = 'OpenSans';
+	// Temp file if needed for de interlace
+	var $temp_file = CACHEDIR . '/pdf-print.temp.png';
 
 	/**
 	 * Converts a block of HTML to appropriate fPDF commands
@@ -435,9 +437,21 @@ class ElkPdf extends tFPDF
 					$this->image_line = 0;
 				}
 
+				// Detect and repair interlaced PNG files.
+				if ($type === 'PNG')
+				{
+					$a['filename'] = $this->deInterlace($a['filename']);
+				}
+
 				$this->image_height = max($this->image_height, $a['height']);
 				$this->Cell($a['width'] + $this->_px2mm($this->rMargin), $a['height'] + $this->_px2mm($this->tMargin), $this->Image($a['filename'], $this->GetX(), $this->GetY(), $a['width'], $a['height'], $type), 0, 0, 'L', false);
 				$this->image_line += $this->_px2mm($this->rMargin);
+
+				// Cleanup if needed
+				if ($a['filename'] === $this->temp_file)
+				{
+					@unlink($this->temp_file);
+				}
 			}
 		}
 
@@ -448,6 +462,39 @@ class ElkPdf extends tFPDF
 		{
 			$this->Ln(max($this->image_height, $a['height']));
 		}
+	}
+
+	public function deInterlace($filename)
+	{
+		$success = false;
+
+		// Open the file and check the interlaced" flag it's byte 13 of the iHDR
+		$handle = fopen($filename, 'r');
+		$contents = fread($handle, 32);
+		fclose($handle);
+
+		// If the interlace flag is on, lets try to de-interlace it to a temp file
+		if (ord($contents[28]) != 0)
+		{
+			require_once(SUBSDIR . '/Graphics.subs.php');
+
+			if (checkImagick())
+			{
+				$image = new Imagick($filename);
+				$success = $image->writeImage($this->temp_file);
+				$image->clear();
+			}
+			elseif (checkGD())
+			{
+				$image = imagecreatefrompng($filename);
+				imagealphablending($image, false);
+				imagesavealpha($image, true);
+				imageinterlace($image, 0);
+				$success = imagepng($image, $this->temp_file);
+			}
+		}
+
+		return $success ? $this->temp_file : $filename;
 	}
 
 	/**
