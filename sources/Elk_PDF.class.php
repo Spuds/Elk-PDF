@@ -5,7 +5,7 @@
  * @author Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.4
+ * @version 1.0.5
  *
  */
 
@@ -138,7 +138,7 @@ class ElkPdf extends tFPDF
 		$this->html = $this->doc->save();
 
 		// Clean it up for proper printing
-		$this->html = html_entity_decode(htmlspecialchars_decode($this->html, ENT_QUOTES), ENT_QUOTES, 'UTF-8');
+		$this->html = html_entity_decode(un_htmlspecialchars($this->html, ENT_QUOTES), ENT_QUOTES, 'UTF-8');
 		$this->html = strip_tags($this->html, '<a><img><div><p><br><blockquote><pre><ol><ul><li><hr><b><i><u><strong><em>');
 	}
 
@@ -779,9 +779,9 @@ class ElkPdf extends tFPDF
 		$this->SetFont($this->font_face, '', 8);
 		$this->Ln($this->line_height);
 		$this->_draw_line();
-		$this->Write($this->line_height, $txt['page'] . ' ' . $this->page . ' / {elk_nb} ---- ' . html_entity_decode(htmlspecialchars_decode($mbname)) . ' ' . $txt['topic'] . ' ' . $txt['link'] . ': ');
+		$this->Write($this->line_height, $txt['page'] . ' ' . $this->page . ' / {elk_nb} ---- ' . html_entity_decode(un_htmlspecialchars($mbname)) . ' ---- ' . $txt['topic'] . ' ' . $txt['link'] . ': ');
 		$this->in_quote++;
-		$this->_add_link($scripturl . '?topic=' . $topic, $context['topic_subject']);
+		$this->_add_link($scripturl . '?topic=' . $topic, un_htmlspecialchars($context['topic_subject']));
 		$this->in_quote--;
 	}
 

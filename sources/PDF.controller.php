@@ -5,7 +5,7 @@
  * @author Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.4
+ * @version 1.0.5
  *
  */
 
@@ -139,9 +139,9 @@ class PDF_Controller extends Action_Controller
 			stream_wrapper_register("elkimg", "VariableStream");
 
 			// Common page setup
-			$pdf->SetAuthor($forum_version);
-			$pdf->SetTitle($mbname);
-			$pdf->SetSubject($context['topic_subject']);
+			$pdf->SetAuthor(un_htmlspecialchars($mbname), true);
+			$pdf->SetTitle(un_htmlspecialchars($mbname) . '_' . $context['board_name'], true);
+			$pdf->SetSubject($context['topic_subject'], true);
 			$pdf->SetMargins($modSettings['pdf_wmargin'], $modSettings['pdf_hmargin']);
 			$pdf->SetLineWidth(.1);
 
@@ -194,8 +194,10 @@ class PDF_Controller extends Action_Controller
 					@ob_end_clean();
 				}
 
+				$outputname = $this->filter_filename(un_htmlspecialchars($mbname) . '_' . html_entity_decode($context['topic_subject'])) . '.pdf';
+
 				// Get the PDF output
-				$out = $pdf->Output('ElkArte' . date('Ymd') . '.pdf', 'S', true);
+				$out = $pdf->Output($outputname, 'S', true);
 
 				// Set the output compression
 				if (!empty($modSettings['enableCompressedOutput']) && strlen($out) <= 4194304)
@@ -218,7 +220,7 @@ class PDF_Controller extends Action_Controller
 				}
 
 				header('Content-Length: ' . strlen($out));
-				header('Content-disposition: inline; filename=ElkForum' . date('Ymd') . '.pdf');
+				header('Content-disposition: inline; filename=' . $outputname);
 
 				echo $out;
 
@@ -234,5 +236,55 @@ class PDF_Controller extends Action_Controller
 		{
 			fatal_error($e->getMessage(), false);
 		}
+	}
+
+	/**
+	 * File system reserved https://en.wikipedia.org/wiki/Filename#Reserved_characters_and_words
+	 * control characters http://msdn.microsoft.com/en-us/library/windows/desktop/aa365247%28v=vs.85%29.aspx
+	 * non-printing characters DEL, NO-BREAK SPACE, SOFT HYPHEN
+	 * URI reserved https://tools.ietf.org/html/rfc3986#section-2.2
+	 * URL unsafe characters https://www.ietf.org/rfc/rfc1738.txt
+	 *
+	 * @param $filename
+	 * @param bool $beautify
+	 * @return mixed|string
+	 */
+	private function filter_filename($filename, $beautify = true) {
+		// Sanitize filename
+		$filename = preg_replace('~[<>:"/\\|?*]|[\x00-\x1F]|[\x7F\xA0\xAD]|[#\[\]@!$&\'()+,;=]|[{}^\~`]~x', '-', $filename);
+
+		// Avoid ".", ".." or ".hiddenFiles"
+		$filename = ltrim($filename, '.-');
+
+		// Beautification
+		if ($beautify)
+		{
+			$filename = $this->beautify_filename($filename);
+		}
+
+		// Maximize filename length to 250 characters
+		$filename = Util::shorten_text(pathinfo($filename, PATHINFO_FILENAME), 250, false, '');
+
+		return $filename;
+	}
+
+	/**
+	 * Make a name normal looking after illegal characters have been replaced
+	 *
+	 * @param $filename
+	 * @return mixed|string
+	 */
+	private function beautify_filename($filename)
+	{
+		// reduce consecutive characters, file   name.zip" becomes "file-name.zip"
+		$filename = preg_replace(array('/ +/', '/_+/', '/-+/'), '-', $filename);
+
+		// "file--.--.-.--name.zip" becomes "file.name.zip"
+		$filename = preg_replace(array('/-*\.-*/', '/\.{2,}/'), '.', $filename);
+
+		// ".file-name.-" becomes "file-name"
+		$filename = trim($filename, '.-');
+
+		return $filename;
 	}
 }
