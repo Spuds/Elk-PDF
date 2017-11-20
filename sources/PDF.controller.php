@@ -5,7 +5,7 @@
  * @author Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.5
+ * @version 1.0.6
  *
  */
 
@@ -113,7 +113,7 @@ class PDF_Controller extends Action_Controller
 	 */
 	private function _create_pdf()
 	{
-		global $modSettings, $forum_version, $mbname, $context;
+		global $modSettings, $mbname, $context;
 
 		if (empty($modSettings['pdf_page']))
 		{
@@ -213,7 +213,7 @@ class PDF_Controller extends Action_Controller
 				// Output content to browser
 				header('Content-Type: application/pdf');
 
-				if ($_SERVER['SERVER_PORT'] == '443' && (strpos($_SERVER['HTTP_USER_AGENT'], 'MSIE') !== false))
+				if ($_SERVER['SERVER_PORT'] === '443' && (strpos($_SERVER['HTTP_USER_AGENT'], 'MSIE') !== false))
 				{
 					header('Cache-Control: must-revalidate, post-check=0, pre-check=0', true);
 					header('Pragma: public', true);
@@ -234,7 +234,10 @@ class PDF_Controller extends Action_Controller
 		}
 		catch (Exception $e)
 		{
-			fatal_error($e->getMessage(), false);
+			if (substr(FORUM_VERSION, 8, 3) === '1.1')
+				throw new Elk_Exception($e->getMessage());
+			else
+				fatal_error($e->getMessage(), false);
 		}
 	}
 
