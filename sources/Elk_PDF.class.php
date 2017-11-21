@@ -206,7 +206,7 @@ class ElkPdf extends tFPDF
 				}
 
 				// If its the start of a quote block
-				if (isset($attr['class']) && $attr['class'] === 'quoteheader')
+				if (isset($attr['class']) && strpos($attr['class'], 'quoteheader') !== false)
 				{
 					// Need to track the first quote so we can tag the border box start
 					if ($this->in_quote == 0)
@@ -216,11 +216,12 @@ class ElkPdf extends tFPDF
 					}
 
 					// Keep track of quote depth so they are indented
-					$this->lMargin += ($this->in_quote) * 10;
+					$this->lMargin += ($this->in_quote) * 5;
+					$this->SetLeftMargin($this->lMargin);
 					$this->in_quote++;
 				}
 				// Maybe a codeblock
-				elseif (isset($attr['class']) && $attr['class'] === 'codeheader')
+				elseif (isset($attr['class']) && strpos($attr['class'],'codeheader') !== false)
 				{
 					$this->_draw_line();
 					$this->AddFont('DejaVuMono', '', 'DejaVuSansMono.ttf', true);
@@ -252,9 +253,11 @@ class ElkPdf extends tFPDF
 				break;
 			case 'blockquote':
 				$this->in_quote--;
-				$this->lMargin -= ($this->in_quote) * 10;
+				$this->lMargin -= ($this->in_quote) * 5;
+				$this->SetLeftMargin($this->lMargin);
+				$this->Ln(8);
 
-				if ($this->in_quote == 0)
+				if ($this->in_quote === 0)
 				{
 					$this->SetFont($this->font_face, '', 10);
 					$this->_elk_set_text_color(0, 0, 0);
@@ -567,10 +570,30 @@ class ElkPdf extends tFPDF
 			// Use our stream wrapper since we have the data in memory
 			$elkimg = 'img' . md5($this->image_data);
 			$GLOBALS[$elkimg] = $this->image_data;
-			$this->Ln($this->line_height);
+
+			// Add the image, keep smiles inline
+			$this->_handleSmiles($thumbheight);
 			$this->Cell($thumbwidth, $thumbheight, $this->Image('elkimg://' . $elkimg, $this->GetX(), $this->GetY(), $thumbwidth, $thumbheight, isset($attr['type']) ? $attr['type'] : ''), 0, 0, 'L', false);
-			$this->Ln($thumbheight);
+			$this->_handleSmiles($thumbheight);
+
 			unset($GLOBALS[$elkimg], $this->image_data, $this->image_info);
+		}
+	}
+
+	/**
+	 * Adds a newline if its an large image, otherwise keeps in inline with padding
+	 *
+	 * @param int $thumbheight
+	 */
+	private function _handleSmiles($thumbheight)
+	{
+		if ($thumbheight > 18)
+		{
+			$this->Ln($this->line_height);
+		}
+		else
+		{
+			$this->Write($this->line_height, ' ');
 		}
 	}
 
