@@ -1,4 +1,4 @@
-## Print to PDF Version 1.0.5
+## Print to PDF
 
 ## License
 This Elkarte addon is released under a [BSD-3-Clause](http://opensource.org/licenses/BSD-3-Clause) license.
