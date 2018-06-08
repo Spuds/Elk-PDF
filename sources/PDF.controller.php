@@ -5,7 +5,7 @@
  * @author Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.6
+ * @version 1.0.7
  *
  */
 
@@ -52,7 +52,15 @@ class PDF_Controller extends Action_Controller
 		{
 			unset($_REQUEST['action']);
 			$context['theme_loaded'] = false;
-			fatal_lang_error('feature_disabled', false);
+
+			if (substr(FORUM_VERSION, 8, 3) === '1.1')
+			{
+				\Errors::instance()->fatal_lang_error('feature_disabled', false);
+			}
+			else
+			{
+				fatal_lang_error('feature_disabled', false);
+			}
 		}
 
 		// Clear out any template layers
