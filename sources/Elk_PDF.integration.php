@@ -9,11 +9,6 @@
  *
  */
 
-if (!defined('ELK'))
-{
-	die('No access...');
-}
-
 /**
  * integrate_display_buttons hook, called from Display.controller
  *

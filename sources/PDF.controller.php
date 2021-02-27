@@ -165,7 +165,7 @@ class PDF_Controller extends Action_Controller
 
 			// Start the first page and auto page counter
 			$pdf->AliasNbPages('{elk_nb}');
-			$pdf->begin_page($context['topic_subject']);
+			$pdf->begin_page();
 
 			// On to the posts for this topic
 			$count = 0;

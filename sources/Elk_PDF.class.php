@@ -16,43 +16,61 @@ if (!defined('ELK'))
 
 class ElkPdf extends tFPDF
 {
-	// Current href src
+	/** @var string Current href src */
 	var $_href = '';
-	// Depth of b
+
+	/** @var int Depth of b */
 	var $b;
-	// Depth of u
+
+	/** @var int Depth of u */
 	var $u;
-	// Depth of i
+
+	/** @var int Depth of i */
 	var $i;
-	// Total width of images in a line of images
+
+	/** @var int Total width of images in a line of images */
 	var $image_line = 0;
-	// Tallest image in a line
+
+	/** @var int Tallest image in a line */
 	var $image_height = 0;
-	// Page width less margins
+
+	/** @var int Page width less margins */
 	var $page_width;
-	// Page height less margins
+
+	/** @var int Page height less margins */
 	var $page_height;
-	// If we are in a quote or not
+
+	/** @var int If we are in a quote or not */
 	var $in_quote = 0;
-	// Start position of a quote block, used to draw a box
+
+	/** @var int Start position of a quote block, used to draw a box*/
 	var $quote_start_y;
-	// Line height for breaks etc
+
+	/** @var int Line height for breaks etc */
 	var $line_height = 5;
-	// The html that will be parsed
+
+	/** @var string The html that will be parsed */
 	var $html = '';
-	// If this the first node, used to prevent excess whitespace at start
+
+	/** @var bool If this the first node, used to prevent excess whitespace at start */
 	var $_first_node = true;
-	// Image types we support
+
+	/** @var string[] Image types we support */
 	var $_validImageTypes = array(1 => 'gif', 2 => 'jpg', 3 => 'png', 9 => 'jpg');
-	// holds html object from dom parser str_get_html
+
+	/** @var holds html object from dom parser str_get_html*/
 	var $doc;
-	// holds loaded image data
+
+	/** @var holds loaded image data*/
 	var $image_data;
-	// holds results of getimagesize
+
+	/** @var array holds results of getimagesize */
 	var $image_info;
-	// Primary font face to use in the PDF, 'DejaVu' or 'OpenSans'
+
+	/** @var string Primary font face to use in the PDF, 'DejaVu' or 'OpenSans' */
 	var $font_face = 'OpenSans';
-	// Temp file if needed for de interlace
+
+	/** @var string Temp file if needed for de interlace */
 	var $temp_file = CACHEDIR . '/pdf-print.temp.png';
 
 	/**
@@ -311,7 +329,7 @@ class ElkPdf extends tFPDF
 	}
 
 	/**
-	 * Draws a rectangular box around a quoteblock
+	 * Draws a rectangular box around a quote block
 	 */
 	private function _draw_box()
 	{
@@ -337,7 +355,7 @@ class ElkPdf extends tFPDF
 	}
 
 	/**
-	 * An example for gallerys, gets the image filename that will be used to load
+	 * An example for gallery's, gets the image filename that will be used to load
 	 * locally via _fetch_image().  Sets an .gal extension used to let _fetch_image
 	 * know that its a local file it need to attempt to load.
 	 */
@@ -467,6 +485,14 @@ class ElkPdf extends tFPDF
 		}
 	}
 
+	/**
+	 * The pdf parser only likes none interlaced images.  This will
+	 * use GD or Imagik functions to create a new standard image for
+	 * insertion.
+	 *
+	 * @param string $filename
+	 * @return string
+	 */
 	public function deInterlace($filename)
 	{
 		$success = false;
