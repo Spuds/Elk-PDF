@@ -5,7 +5,7 @@
  * @author Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.7
+ * @version 1.0.8
  *
  */
 

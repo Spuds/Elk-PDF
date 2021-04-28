@@ -5,7 +5,7 @@
  * @author Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.7
+ * @version 1.0.8
  *
  */
 
@@ -238,9 +238,13 @@ class PDF_Controller extends Action_Controller
 		catch (Exception $e)
 		{
 			if (substr(FORUM_VERSION, 8, 3) === '1.1')
+			{
 				throw new Elk_Exception($e->getMessage());
+			}
 			else
+			{
 				fatal_error($e->getMessage(), false);
+			}
 		}
 	}
 
@@ -255,7 +259,8 @@ class PDF_Controller extends Action_Controller
 	 * @param bool $beautify
 	 * @return mixed|string
 	 */
-	private function filter_filename($filename, $beautify = true) {
+	private function filter_filename($filename, $beautify = true)
+	{
 		// Sanitize filename
 		$filename = preg_replace('~[<>:"/\\|?*]|[\x00-\x1F]|[\x7F\xA0\xAD]|[#\[\]@!$&\'()+,;=]|[{}^\~`]~x', '-', $filename);
 
@@ -269,9 +274,7 @@ class PDF_Controller extends Action_Controller
 		}
 
 		// Maximize filename length to 250 characters
-		$filename = Util::shorten_text(pathinfo($filename, PATHINFO_FILENAME), 250, false, '');
-
-		return $filename;
+		return Util::shorten_text(pathinfo($filename, PATHINFO_FILENAME), 250, false, '');
 	}
 
 	/**
@@ -289,8 +292,6 @@ class PDF_Controller extends Action_Controller
 		$filename = preg_replace(array('/-*\.-*/', '/\.{2,}/'), '.', $filename);
 
 		// ".file-name.-" becomes "file-name"
-		$filename = trim($filename, '.-');
-
-		return $filename;
+		return trim($filename, '.-');
 	}
 }

@@ -5,14 +5,9 @@
  * @author Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.5
+ * @version 1.0.8
  *
  */
-
-if (!defined('ELK'))
-{
-	die('No access...');
-}
 
 class ElkPdf extends tFPDF
 {
@@ -348,7 +343,7 @@ class ElkPdf extends tFPDF
 		$this->SetTextColor(0, 0, 255);
 		$this->_set_style('u', true);
 		$this->SetFont($this->font_face, '', ($this->in_quote ? 8 : 10));
-		$this->Write($this->line_height, $caption ? $caption : ' ', $url);
+		$this->Write($this->line_height, !empty($caption) ? $caption : ' ', $url);
 		$this->SetFont($this->font_face, '', 10);
 		$this->_set_style('u', false);
 		$this->SetTextColor(-1);
@@ -599,7 +594,7 @@ class ElkPdf extends tFPDF
 
 			// Add the image, keep smiles inline
 			$this->_handleSmiles($thumbheight);
-			$this->Cell($thumbwidth, $thumbheight, $this->Image('elkimg://' . $elkimg, $this->GetX(), $this->GetY(), $thumbwidth, $thumbheight, isset($attr['type']) ? $attr['type'] : ''), 0, 0, 'L', false);
+			$this->Cell($thumbwidth, $thumbheight, $this->Image('elkimg://' . $elkimg, $this->GetX(), $this->GetY(), $thumbwidth, $thumbheight, $attr['type'] ?? ''), 0, 0, 'L', false);
 			$this->_handleSmiles($thumbheight);
 
 			unset($GLOBALS[$elkimg], $this->image_data, $this->image_info);
