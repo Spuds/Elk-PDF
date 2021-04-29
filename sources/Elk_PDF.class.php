@@ -29,7 +29,7 @@ class ElkPdf extends tFPDF
 	private $page_height;
 	/** @var int If we are in a quote or not */
 	private $in_quote = 0;
-	/** @var int Start position of a quote block, used to draw a box*/
+	/** @var int Start position of a quote block, used to draw a box */
 	private $quote_start_y;
 	/** @var int Line height for breaks etc */
 	private $line_height = 5;
@@ -39,9 +39,9 @@ class ElkPdf extends tFPDF
 	private $_first_node = true;
 	/** @var string[] Image types we support */
 	private $_validImageTypes = array(1 => 'gif', 2 => 'jpg', 3 => 'png', 9 => 'jpg');
-	/** @var object holds html object from dom parser str_get_html*/
+	/** @var object holds html object from dom parser str_get_html */
 	private $doc;
-	/** @var string holds loaded image data*/
+	/** @var string holds loaded image data */
 	private $image_data;
 	/** @var array holds results of getimagesize */
 	private $image_info;
@@ -49,6 +49,12 @@ class ElkPdf extends tFPDF
 	private $font_face = 'OpenSans';
 	/** @var string Temp file if needed for de interlace */
 	private $temp_file = CACHEDIR . '/pdf-print.temp.png';
+	/** @var array holds attachment array data for a single message */
+	private $attachments;
+	/** @var int[] holds ids of ILA attachments we have used */
+	private $dontShowBelow;
+	/** @var int current line height position, used to force linebreak on next image */
+	private $ila_height = 0;
 
 	/**
 	 * Converts a block of HTML to appropriate fPDF commands
@@ -127,8 +133,11 @@ class ElkPdf extends tFPDF
 		require_once(EXTDIR . '/simple_html_dom.php');
 		$this->doc = str_get_html($this->html, true, true, 'UTF-8', false);
 
-		// Gallerys are kind of special, see this function on one way to deal with them
-		// $this->_prepare_gallery();
+		// ILA's will be shown in the post text, but only left aligned is used
+		$this->_prepare_ila();
+
+		// Gallery's are kind of special, see this function on one way to deal with them
+		$this->_prepare_gallery();
 
 		$this->html = $this->doc->save();
 
@@ -216,7 +225,7 @@ class ElkPdf extends tFPDF
 					$this->in_quote++;
 				}
 				// Maybe a codeblock
-				elseif (isset($attr['class']) && strpos($attr['class'],'codeheader') !== false)
+				elseif (isset($attr['class']) && strpos($attr['class'], 'codeheader') !== false)
 				{
 					$this->_draw_line();
 					$this->AddFont('DejaVuMono', '', 'DejaVuSansMono.ttf', true);
@@ -224,6 +233,7 @@ class ElkPdf extends tFPDF
 				}
 				break;
 			case 'hr':
+				$this->Ln($this->line_height);
 				$this->_draw_line();
 				break;
 		}
@@ -287,6 +297,7 @@ class ElkPdf extends tFPDF
 		$this->AddPage();
 		$this->_get_page_width();
 		$this->_get_page_height();
+		$this->ila_height = 0;
 	}
 
 	/**
@@ -332,12 +343,60 @@ class ElkPdf extends tFPDF
 	}
 
 	/**
+	 * Finds ILA DNA in the markup and replaces the wrapped <a link+img> with a new
+	 * img only tag set to local src for the attachment
+	 */
+	private function _prepare_ila()
+	{
+		$elements = $this->doc->find('a[id] img.bbc_img');
+		foreach ($elements as $node)
+		{
+			$parent = $node->parent();
+			$ilaDetected = strpos($node->src, 'dlattach') !== false && array_key_exists('data-lightboximage', $parent->attr);
+			if ($ilaDetected)
+			{
+				$attach_id = $parent->attr['data-lightboximage'];
+				$attach = $this->find_attachment($attach_id);
+				if ($attach !== false)
+				{
+					$parent->outertext = '<img src="' . $attach['filename'] . '.gal">';
+					$this->dontShowBelow[$attach['id_attach']] = $attach['id_attach'];
+				}
+			}
+		}
+	}
+
+	/**
+	 * Returns the attachment array for a given attachment id
+	 *
+	 * @param int $id
+	 * @return false|mixed
+	 */
+	private function find_attachment($id)
+	{
+		// id_attach, id_msg, approved, width", height, file_hash, filename, id_folder, mime_type
+		foreach ($this->attachments as $attachment)
+		{
+			if ($attachment['id_attach'] = $id)
+			{
+				return $attachment;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * An example for gallery's, gets the image filename that will be used to load
 	 * locally via _fetch_image().  Sets an .gal extension used to let _fetch_image
-	 * know that its a local file it need to attempt to load.
+	 * know that its a local file to load.
 	 */
 	private function _prepare_gallery()
 	{
+		return;
+		//<a href="http://192.168.99.90/elkarte/index.php?media/file/canterbury.44/" id="link_1m" data-lightboximage="1m" data-lightboxmessage="79">
+		//	<img class="bbc_image has_lightbox" src="http://192.168.99.90/elkarte/index.php?media/file/canterbury.44/thumb/" alt="Canterbury" title="Canterbury">
+		//</a>
 		global $settings;
 
 		// Dependencies
@@ -377,22 +436,44 @@ class ElkPdf extends tFPDF
 		}
 	}
 
+
+	/**
+	 * Sets attachments array to the class
+	 *
+	 * @param $attach
+	 */
+	public function set_attachments($attach)
+	{
+		$this->attachments = $attach;
+	}
+
 	/**
 	 * Inserts images below the post text
 	 * Attempts to place as many on a single line as possible
-	 *
-	 * @param mixed[] $attach
 	 */
-	public function add_attachments($attach)
+	public function add_attachments()
 	{
-		$this->Ln($this->line_height);
+		if (!empty($this->ila_height))
+		{
+			$this->Ln($this->ila_height - $this->y);
+		}
+		else
+		{
+			$this->Ln($this->line_height);
+		}
+
 		$this->_draw_line();
 		$this->Ln(2);
 		$this->AutoPageBreak = false;
 		$this->image_line = 0;
 
-		foreach ($attach as $a)
+		foreach ($this->attachments as $a)
 		{
+			if (isset($this->dontShowBelow[$a['id_attach']]))
+			{
+				continue;
+			}
+
 			switch ($a['mime_type'])
 			{
 				case 'image/jpeg':
@@ -418,21 +499,20 @@ class ElkPdf extends tFPDF
 
 				// Does it fit on this row
 				$this->image_line += $a['width'];
-
 				if ($this->image_line >= $this->page_width)
 				{
 					// New row, move the cursor down to the next row based on the tallest image
-					$this->Ln($this->image_height + $this->line_height);
+					$this->Ln($this->image_height + 2);
 					$this->image_height = 0;
-					$this->image_line = 0;
+					$this->image_line = $a['width'];
 				}
 
 				// Does it fit on this page, or is a new one needed?
-				if ($this->y + $a['height'] > $this->PageBreakTrigger)
+				if ($this->y + $a['height'] > $this->h - 6)
 				{
 					$this->AddPage();
 					$this->image_height = 0;
-					$this->image_line = 0;
+					$this->image_line = $a['width'];
 				}
 
 				// Detect and repair interlaced PNG files.
@@ -442,8 +522,10 @@ class ElkPdf extends tFPDF
 				}
 
 				$this->image_height = max($this->image_height, $a['height']);
-				$this->Cell($a['width'] + $this->_px2mm($this->rMargin), $a['height'] + $this->_px2mm($this->tMargin), $this->Image($a['filename'], $this->GetX(), $this->GetY(), $a['width'], $a['height'], $type), 0, 0, 'L', false);
-				$this->image_line += $this->_px2mm($this->rMargin);
+				$this->Image($a['filename'], $this->x, $this->y, $a['width'], $a['height'], $type);
+				$this->Cell($a['width'] + 2, $a['height'], '', 0, 0, 'L', false);
+
+				$this->image_line += 2;
 
 				// Cleanup if needed
 				if ($a['filename'] === $this->temp_file)
@@ -454,12 +536,9 @@ class ElkPdf extends tFPDF
 		}
 
 		// Last image, move the cursor position to the next row
-		$this->AutoPageBreak = true;
+		$this->Ln($this->image_height);
 
-		if (isset($a['height']))
-		{
-			$this->Ln(max($this->image_height, $a['height']));
-		}
+		$this->AutoPageBreak = true;
 	}
 
 	/**
@@ -504,8 +583,7 @@ class ElkPdf extends tFPDF
 	}
 
 	/**
-	 * Inserts images below the post text, does not do it "inline" but each on a new
-	 * line.
+	 * Inserts images with left "in line: alignment.  Only one image per line with wrapped text.
 	 *
 	 * @param mixed[] $attr
 	 */
@@ -527,76 +605,85 @@ class ElkPdf extends tFPDF
 				return;
 			}
 
-			// Set the type based on what was loaded
-			$attr['type'] = $this->_validImageTypes[(int) $this->image_info[2]];
-
-			// If no specific width/height was on the image tag, check if its in the style
-			if (isset($attr['style']) && (!isset($attr['width']) && !isset($attr['height'])))
-			{
-				// Extract the style width and height
-				if (preg_match('~.*?width:(\d+)px.*?~', $attr['style'], $matches))
-				{
-					$attr['width'] = $matches[1];
-				}
-				if (preg_match('~.*?height:(\d+)px.*?~', $attr['style'], $matches))
-				{
-					$attr['height'] = $matches[1];
-				}
-			}
-
-			// No size set that we can find, so just use the image size
-			if (empty($attr['width']) && empty($attr['height']))
-			{
-				$attr['width'] = $this->image_info[0];
-				$attr['height'] = $this->image_info[1];
-			}
-			// Maybe a width but no height, square is good
-			elseif (!empty($attr['width']) && empty($attr['height']))
-			{
-				$attr['height'] = $attr['width'];
-			}
-			// Maybe a height but no width, square is dandy
-			elseif (empty($attr['width']) && !empty($attr['height']))
-			{
-				$attr['width'] = $attr['height'];
-			}
-
-			// Some scaling may be needed, does the image even fit on a page?
+			// Some scaling may be needed to conform to our 2x2 grid
+			$this->_setImageAttr($attr);
 			list($thumbwidth, $thumbheight) = $this->_scale_image($attr['width'], $attr['height']);
+
+			// If we output a previous image "inline" are we now need to be below that previous image
+			// before we plop in this new image
+			if ($this->y < $this->ila_height)
+			{
+				$this->Ln($this->ila_height - $this->y);
+			}
 
 			// Does it fit on this page, or is a new one needed?
 			if ($this->y + $thumbheight > $this->PageBreakTrigger)
 			{
 				$this->AddPage();
+				$this->ila_height = 0;
 			}
 
 			// Use our stream wrapper since we have the data in memory
 			$elkimg = 'img' . md5($this->image_data);
 			$GLOBALS[$elkimg] = $this->image_data;
 
-			// Add the image, keep smiles inline
-			$this->_handleSmiles($thumbheight);
-			$this->Cell($thumbwidth, $thumbheight, $this->Image('elkimg://' . $elkimg, $this->GetX(), $this->GetY(), $thumbwidth, $thumbheight, $attr['type'] ?? ''), 0, 0, 'L', false);
-			$this->_handleSmiles($thumbheight);
+			// Add the image, keep smiles and other small images inline
+			$smiley = $thumbheight < 18;
+			if (!$smiley)
+			{
+				$this->ila_height = ceil($this->GetY() + $thumbheight + $this->_px2mm($this->tMargin));
+			}
+
+			// Output the image
+			$this->Image('elkimg://' . $elkimg, $this->GetX(), $this->GetY(), $thumbwidth, $thumbheight, $attr['type'] ?? '');
+
+			// Wrap the image with a cell, newline if its not a smiley
+			$this->Cell($thumbwidth + 2, $thumbheight + 2, $smiley ? ' ' : '', 0, 0, 'L', false);
 
 			unset($GLOBALS[$elkimg], $this->image_data, $this->image_info);
 		}
 	}
 
 	/**
-	 * Adds a newline if its an large image, otherwise keeps in inline with padding
+	 * Sets image attributes either from the html tag or from what we can determine from the
+	 * image data
 	 *
-	 * @param int $thumbheight
+	 * @param $attr
 	 */
-	private function _handleSmiles($thumbheight)
+	private function _setImageAttr(&$attr)
 	{
-		if ($thumbheight > 18)
+		// Set the type based on what was loaded
+		$attr['type'] = $this->_validImageTypes[(int) $this->image_info[2]];
+
+		// If no specific width/height was on the image tag, check if its in the style
+		if (isset($attr['style']) && (!isset($attr['width']) && !isset($attr['height'])))
 		{
-			$this->Ln($this->line_height);
+			// Extract the style width and height
+			if (preg_match('~.*?width:(\d+)px.*?~', $attr['style'], $matches))
+			{
+				$attr['width'] = $matches[1];
+			}
+			if (preg_match('~.*?height:(\d+)px.*?~', $attr['style'], $matches))
+			{
+				$attr['height'] = $matches[1];
+			}
 		}
-		else
+
+		// No size set that we can find, so just use the image size
+		if (empty($attr['width']) && empty($attr['height']))
 		{
-			$this->Write($this->line_height, ' ');
+			$attr['width'] = $this->image_info[0];
+			$attr['height'] = $this->image_info[1];
+		}
+		// Maybe a width but no height, square is good
+		elseif (!empty($attr['width']) && empty($attr['height']))
+		{
+			$attr['height'] = $attr['width'];
+		}
+		// Maybe a height but no width, square is dandy
+		elseif (empty($attr['width']) && !empty($attr['height']))
+		{
+			$attr['width'] = $attr['height'];
 		}
 	}
 
@@ -658,8 +745,8 @@ class ElkPdf extends tFPDF
 		$down = 2;
 
 		// Max width and height
-		$max_width = $this->page_width / $across - $this->_px2mm(($across - 1) * $this->rMargin);
-		$max_height = $this->page_height / $down - $this->_px2mm(($down - 1) * $this->tMargin);
+		$max_width = floor($this->page_width / $across - ($across - 1) * 2);
+		$max_height = floor($this->page_height / $down - ($down - 1) * 2);
 
 		// Some scaling may be needed, does the image even fit on a page?
 		if ($max_width < $width && $width >= $height)
@@ -678,7 +765,7 @@ class ElkPdf extends tFPDF
 			$thumbwidth = $width;
 		}
 
-		return array(ceil($thumbwidth), ceil($thumbheight));
+		return array(floor($thumbwidth), floor($thumbheight));
 	}
 
 	/**
@@ -735,6 +822,7 @@ class ElkPdf extends tFPDF
 		if ($this->y + 4 > $this->page_height)
 		{
 			$this->AddPage();
+			$this->ila_height = 0;
 		}
 
 		// Subject
@@ -765,7 +853,7 @@ class ElkPdf extends tFPDF
 	 */
 	public function end_message()
 	{
-		$this->Ln(10);
+		$this->Ln(!empty($this->ila_height) ? $this->ila_height - $this->y : 10);
 	}
 
 	/**
@@ -803,7 +891,7 @@ class ElkPdf extends tFPDF
 		global $scripturl, $topic, $mbname, $txt, $context;
 
 		$this->SetFont($this->font_face, '', 8);
-		$this->Ln($this->line_height);
+		$this->y = $this->h - 6;
 		$this->_draw_line();
 		$this->Write($this->line_height, $txt['page'] . ' ' . $this->page . ' / {elk_nb} ---- ' . html_entity_decode(un_htmlspecialchars($mbname)) . ' ---- ' . $txt['topic'] . ' ' . $txt['link'] . ': ');
 		$this->in_quote++;

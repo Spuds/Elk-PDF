@@ -175,13 +175,19 @@ class PDF_Controller extends Action_Controller
 					$pdf->add_poll(html_entity_decode($context['poll']['question']), $context['poll']['options'], $context['allow_poll_view']);
 				}
 
+				// Load any attachment images
+				if (!empty($context['printattach'][$post['id_msg']]))
+				{
+					$pdf->set_attachments($context['printattach'][$post['id_msg']]);
+				}
+
 				// Write message body.
 				$pdf->write_html(preg_replace_callback('~(&#(\d{1,7}|x[0-9a-fA-F]{1,6});)~', 'fixchar__callback', $post['body']));
 
-				// Show attachment images
+				// Show below post attachment images
 				if (!empty($context['printattach'][$post['id_msg']]))
 				{
-					$pdf->add_attachments($context['printattach'][$post['id_msg']]);
+					$pdf->add_attachments();
 				}
 
 				$pdf->end_message();
