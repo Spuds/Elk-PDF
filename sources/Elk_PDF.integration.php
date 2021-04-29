@@ -22,6 +22,7 @@ function idb_elk2pdf()
 
 	// Replace the print action with PDF
 	if (isset($context['normal_buttons']['print']) && !$user_info['is_guest'])
+	{
 		$context['normal_buttons']['print'] = array(
 			'test' => 'can_print',
 			'text' => 'pdf',
@@ -30,4 +31,5 @@ function idb_elk2pdf()
 			'custom' => 'rel="nofollow"',
 			'class' => 'new_win',
 			'url' => $scripturl . '?action=PDF;topic=' . $context['current_topic'] . '.0');
+	}
 }

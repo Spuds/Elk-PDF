@@ -12,61 +12,43 @@
 class ElkPdf extends tFPDF
 {
 	/** @var string Current href src */
-	var $_href = '';
-
+	private $_href = '';
 	/** @var int Depth of b */
-	var $b;
-
+	private $b;
 	/** @var int Depth of u */
-	var $u;
-
+	private $u;
 	/** @var int Depth of i */
-	var $i;
-
+	private $i;
 	/** @var int Total width of images in a line of images */
-	var $image_line = 0;
-
+	private $image_line = 0;
 	/** @var int Tallest image in a line */
-	var $image_height = 0;
-
+	private $image_height = 0;
 	/** @var int Page width less margins */
-	var $page_width;
-
+	private $page_width;
 	/** @var int Page height less margins */
-	var $page_height;
-
+	private $page_height;
 	/** @var int If we are in a quote or not */
-	var $in_quote = 0;
-
+	private $in_quote = 0;
 	/** @var int Start position of a quote block, used to draw a box*/
-	var $quote_start_y;
-
+	private $quote_start_y;
 	/** @var int Line height for breaks etc */
-	var $line_height = 5;
-
+	private $line_height = 5;
 	/** @var string The html that will be parsed */
-	var $html = '';
-
+	private $html = '';
 	/** @var bool If this the first node, used to prevent excess whitespace at start */
-	var $_first_node = true;
-
+	private $_first_node = true;
 	/** @var string[] Image types we support */
-	var $_validImageTypes = array(1 => 'gif', 2 => 'jpg', 3 => 'png', 9 => 'jpg');
-
-	/** @var holds html object from dom parser str_get_html*/
-	var $doc;
-
-	/** @var holds loaded image data*/
-	var $image_data;
-
+	private $_validImageTypes = array(1 => 'gif', 2 => 'jpg', 3 => 'png', 9 => 'jpg');
+	/** @var object holds html object from dom parser str_get_html*/
+	private $doc;
+	/** @var string holds loaded image data*/
+	private $image_data;
 	/** @var array holds results of getimagesize */
-	var $image_info;
-
+	private $image_info;
 	/** @var string Primary font face to use in the PDF, 'DejaVu' or 'OpenSans' */
-	var $font_face = 'OpenSans';
-
+	private $font_face = 'OpenSans';
 	/** @var string Temp file if needed for de interlace */
-	var $temp_file = CACHEDIR . '/pdf-print.temp.png';
+	private $temp_file = CACHEDIR . '/pdf-print.temp.png';
 
 	/**
 	 * Converts a block of HTML to appropriate fPDF commands
@@ -151,7 +133,7 @@ class ElkPdf extends tFPDF
 		$this->html = $this->doc->save();
 
 		// Clean it up for proper printing
-		$this->html = html_entity_decode(un_htmlspecialchars($this->html, ENT_QUOTES), ENT_QUOTES, 'UTF-8');
+		$this->html = html_entity_decode(un_htmlspecialchars($this->html), ENT_QUOTES, 'UTF-8');
 		$this->html = strip_tags($this->html, '<a><img><div><p><br><blockquote><pre><ol><ul><li><hr><b><i><u><strong><em>');
 	}
 
