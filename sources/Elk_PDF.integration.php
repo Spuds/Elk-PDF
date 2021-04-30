@@ -1,8 +1,9 @@
 <?php
 
 /**
- * @package "Elk2Pdf" Addon for Elkarte
+ * @package "PDF" Addon for Elkarte
  * @author Spuds
+ * @copyright (c) 2011-2021 Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
  * @version 1.0.8
