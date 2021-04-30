@@ -13,12 +13,6 @@ class ElkPdf extends tFPDF
 {
 	/** @var string Current href src */
 	private $_href = '';
-	/** @var int Depth of b */
-	private $b;
-	/** @var int Depth of u */
-	private $u;
-	/** @var int Depth of i */
-	private $i;
 	/** @var int Total width of images in a line of images */
 	private $image_line = 0;
 	/** @var int Tallest image in a line */
@@ -123,8 +117,16 @@ class ElkPdf extends tFPDF
 	 */
 	private function _prepare_html()
 	{
+		global $context;
+
 		// Up front, remove whitespace between html tags
 		$this->html = preg_replace('/(?:(?<=\>)|(?<=\/\>))(\s+)(?=\<\/?)/', '', $this->html);
+
+		// If this message has Levertine gallery images, lets render them now
+		if (!empty($context['lgal_embeds']))
+		{
+			$context['lgal_embeds']->processPBE($this->html);
+		}
 
 		// Add "tabs" for the code blocks
 		$this->html = str_replace('<span class="tab"></span>', '    ', $this->html);
@@ -133,10 +135,10 @@ class ElkPdf extends tFPDF
 		require_once(EXTDIR . '/simple_html_dom.php');
 		$this->doc = str_get_html($this->html, true, true, 'UTF-8', false);
 
-		// ILA's will be shown in the post text, but only left aligned is used
+		// ILA's will be shown in the post text, but only left aligned
 		$this->_prepare_ila();
 
-		// Gallery's are kind of special, see this function on one way to deal with them
+		// Gallery's are kind of special, see this function for ways to deal with them
 		$this->_prepare_gallery();
 
 		$this->html = $this->doc->save();
@@ -387,27 +389,62 @@ class ElkPdf extends tFPDF
 	}
 
 	/**
-	 * An example for gallery's, gets the image filename that will be used to load
-	 * locally via _fetch_image().  Sets an .gal extension used to let _fetch_image
+	 * Process gallery items.  Gets the image filename that will be used to load
+	 * locally via _fetch_image().  Sets a .gal extension, used to let _fetch_image
 	 * know that its a local file to load.
 	 */
 	private function _prepare_gallery()
 	{
-		return;
-		//<a href="http://192.168.99.90/elkarte/index.php?media/file/canterbury.44/" id="link_1m" data-lightboximage="1m" data-lightboxmessage="79">
-		//	<img class="bbc_image has_lightbox" src="http://192.168.99.90/elkarte/index.php?media/file/canterbury.44/thumb/" alt="Canterbury" title="Canterbury">
-		//</a>
-		global $settings;
+		if (file_exists(SOURCEDIR . '/levgal_src/LevGal-Bootstrap.php'))
+		{
+			return $this->_process_levgal_items();
+		}
 
-		// Dependencies
-		require_once(SUBSDIR . '/Aeva-Subs.php');
-		aeva_loadSettings();
+		if (file_exists(SOURCEDIR . '/Aeva-Media.php'))
+		{
+			return $this->_process_aeva_items();
+		}
+	}
 
-		// Remove extra markup not needed
-		$elements = $this->doc->find('div.caption');
+	/**
+	 * We called levgal processPBE as part of the prepare html phase to generate links.
+	 */
+	private function _process_levgal_items()
+	{
+		// All the gallery links
+		$elements = $this->doc->find('a.levgal');
 		foreach ($elements as $node)
 		{
-			$node->outertext = '';
+			// Set the image src to the file location so it can be fetched.
+			$node->outertext = '<img src="' . str_replace('/item/', '/file/', $node->href) . 'preview/.gal">';
+		}
+
+		return true;
+	}
+
+	/**
+	 * If you spun your own version that works with Elk, then this is a potential way to
+	 * deal with the smg attach tags and markup.  Not tested but should work.
+	 */
+	private function _process_aeva_items()
+	{
+		global $settings;
+		static $loaded = false;
+
+		if (!$loaded)
+		{
+			// Dependencies
+			require_once(SUBSDIR . '/Aeva-Subs.php');
+			aeva_loadSettings();
+
+			// Remove extra markup not needed
+			$elements = $this->doc->find('div.caption');
+			foreach ($elements as $node)
+			{
+				$node->outertext = '';
+			}
+
+			$loaded = true;
 		}
 
 		// All the gallery links
@@ -434,8 +471,9 @@ class ElkPdf extends tFPDF
 			// Set the image src to the file location so it can be fetched.
 			$node->parent()->outertext = '<img src="' . (!empty($path) ? $path : $settings['theme_dir'] . '/images/aeva/denied.png') . '.gal">';
 		}
-	}
 
+		return true;
+	}
 
 	/**
 	 * Sets attachments array to the class
@@ -631,14 +669,14 @@ class ElkPdf extends tFPDF
 			$smiley = $thumbheight < 18;
 			if (!$smiley)
 			{
-				$this->ila_height = ceil($this->GetY() + $thumbheight + $this->_px2mm($this->tMargin));
+				$this->ila_height = ceil($this->y + $thumbheight + 2);
 			}
 
 			// Output the image
-			$this->Image('elkimg://' . $elkimg, $this->GetX(), $this->GetY(), $thumbwidth, $thumbheight, $attr['type'] ?? '');
+			$this->Image('elkimg://' . $elkimg, $this->x, $this->y, $thumbwidth, $thumbheight, $attr['type'] ?? '');
 
 			// Wrap the image with a cell, newline if its not a smiley
-			$this->Cell($thumbwidth + 2, $thumbheight + 2, $smiley ? ' ' : '', 0, 0, 'L', false);
+			$this->Cell($thumbwidth + 2, $thumbheight, $smiley ? ' ' : '', 0, 0, 'L', false);
 
 			unset($GLOBALS[$elkimg], $this->image_data, $this->image_info);
 		}
@@ -716,7 +754,15 @@ class ElkPdf extends tFPDF
 				$name = substr($name, 0, -4);
 			}
 
-			$this->image_data = file_get_contents(str_replace($boardurl, BOARDDIR, $name));
+			// No filename is most likely a url, like to a levgal image
+			if ($pathinfo['filename'] !== '')
+			{
+				$this->image_data = file_get_contents(str_replace($boardurl, BOARDDIR, $name));
+			}
+			else
+			{
+				$this->image_data = file_get_contents($pathinfo['dirname']);
+			}
 		}
 		else
 		{
@@ -891,7 +937,7 @@ class ElkPdf extends tFPDF
 		global $scripturl, $topic, $mbname, $txt, $context;
 
 		$this->SetFont($this->font_face, '', 8);
-		$this->y = $this->h - 6;
+		$this->SetY($this->h - 6);
 		$this->_draw_line();
 		$this->Write($this->line_height, $txt['page'] . ' ' . $this->page . ' / {elk_nb} ---- ' . html_entity_decode(un_htmlspecialchars($mbname)) . ' ---- ' . $txt['topic'] . ' ' . $txt['link'] . ': ');
 		$this->in_quote++;
