@@ -6,7 +6,7 @@
  * @copyright (c) 2011-2021 Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.8
+ * @version 1.1.0
  *
  */
 

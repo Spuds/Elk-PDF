@@ -1,7 +1,7 @@
 ## Print to PDF
 
 ## License
-This Elkarte addon is released under a [BSD-3-Clause](http://opensource.org/licenses/BSD-3-Clause) license.
+This Elkarte addon is released under a [BSD-3-Clause](https://opensource.org/licenses/BSD-3-Clause) license.
 
 ## Introduction
 This addon replaces the print button action to instead create a PDF of the topic for viewing / saving.

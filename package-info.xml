@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
-<!DOCTYPE package-info SYSTEM "http://www.elkarte.net/site/package-info">
-<package-info xmlns="http://www.elkarte.net/site/package-info" xmlns:elk="http://www.elkarte.net/">
+<!DOCTYPE package-info SYSTEM "https://www.elkarte.net/site/package-info">
+<package-info xmlns="https://www.elkarte.net/site/package-info" xmlns:elk="https://www.elkarte.net/">
 	<id>Spuds:elk2pdf</id>
 	<name>Print to PDF</name>
-	<version>1.0.8</version>
+	<version>1.1.0</version>
 	<type>addon</type>
 	<license><![CDATA[
 /**
@@ -12,10 +12,10 @@
  * @author spuds
  * @license BSD-3
  *
- * @version 1.0.8
+ * @version 1.1.0
  */
 ]]></license>
-	<install for="1.0 - 1.1.99">
+	<install for="1.1 - 1.1.99">
 		<readme type="file" parsebbc="true">readme.txt</readme>
 		<license type="inline">This Elkarte addon is released under a BSD-3-Clause license.</license>
 		<require-file name="sources/PDF.controller.php" destination="CONTROLLERDIR" />
@@ -25,7 +25,7 @@
 		<hook hook="integrate_display_buttons" file="SOURCEDIR/Elk_PDF.integration.php" function="idb_elk2pdf" />
 	</install>
 
-	<uninstall for="1.0 - 1.1.99">
+	<uninstall for="1.1 - 1.1.99">
 		<hook reverse="true" hook="integrate_display_buttons" file="SOURCEDIR/Elk_PDF.integration.php" function="idb_elk2pdf" />
 		<remove-file name="CONTROLLERDIR/PDF.controller.php" />
 		<remove-file name="SUBSDIR/Elk_PDF.class.php" />
