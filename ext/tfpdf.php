@@ -1,6 +1,6 @@
 <?php
 /*******************************************************************************
- * tFPDF (based on FPDF 1.82)                                                  *
+ * tFPDF (based on FPDF 1.84)                                                  *
  *                                                                             *
  * Version:  1.32                                                              *
  * Date:     2020-08-29                                                        *
@@ -521,7 +521,7 @@ class tFPDF
 				$s.='$originalsize='.$originalsize.";\n";
 				$s.='$fontkey=\''.$fontkey."';\n";
 				$s.="?>";
-			if (is_writable(dirname($this->fontpath.'unifont/'.'x'))) {
+				if (is_writable(dirname($this->fontpath.'unifont/'.'x'))) {
 					$fh = fopen($unifilename.'.mtx.php',"w");
 					fwrite($fh,$s,strlen($s));
 					fclose($fh);
@@ -764,7 +764,7 @@ class tFPDF
 						$this->CurrentFont['subset'][$uni] = $uni;
 				}
 				else
-				$txt2='('.$this->_escape($txt).')';
+					$txt2='('.$this->_escape($txt).')';
 				$s .= sprintf('BT %.2F %.2F Td %s Tj ET',($this->x+$dx)*$k,($this->h-($this->y+.5*$h+.3*$this->FontSize))*$k,$txt2);
 			}
 			if($this->underline)
@@ -1297,6 +1297,7 @@ class tFPDF
 	{
 		$this->page++;
 		$this->pages[$this->page] = '';
+	$this->PageLinks[$this->page] = array();
 		$this->state = 2;
 		$this->x = $this->lMargin;
 		$this->y = $this->tMargin;
@@ -1420,6 +1421,8 @@ class tFPDF
 
 	protected function _escape($s)
 	{
+		if($s === null)
+			return $s;
 		// Escape special characters
 		if(strpos($s,'(')!==false || strpos($s,')')!==false || strpos($s,'\\')!==false || strpos($s,"\r")!==false)
 			return str_replace(array('\\','(',')',"\r"), array('\\\\','\\(','\\)','\\r'), $s);
@@ -1715,27 +1718,13 @@ class tFPDF
 		if(isset($this->PageInfo[$n]['rotation']))
 			$this->_put('/Rotate '.$this->PageInfo[$n]['rotation']);
 		$this->_put('/Resources 2 0 R');
-		if(isset($this->PageLinks[$n]))
+		if(!empty($this->PageLinks[$n]))
 		{
-			// Links
-			$annots = '/Annots [';
+			$s = '/Annots [';
 			foreach($this->PageLinks[$n] as $pl)
-			{
-				$rect = sprintf('%.2F %.2F %.2F %.2F',$pl[0],$pl[1],$pl[0]+$pl[2],$pl[1]-$pl[3]);
-				$annots .= '<</Type /Annot /Subtype /Link /Rect ['.$rect.'] /Border [0 0 0] ';
-				if(is_string($pl[4]))
-					$annots .= '/A <</S /URI /URI '.$this->_textstring($pl[4]).'>>>>';
-				else
-				{
-					$l = $this->links[$pl[4]];
-					if(isset($this->PageInfo[$l[0]]['size']))
-						$h = $this->PageInfo[$l[0]]['size'][1];
-					else
-						$h = ($this->DefOrientation=='P') ? $this->DefPageSize[1]*$this->k : $this->DefPageSize[0]*$this->k;
-					$annots .= sprintf('/Dest [%d 0 R /XYZ 0 %.2F null]>>',$this->PageInfo[$l[0]]['n'],$h-$l[1]*$this->k);
-				}
-			}
-			$this->_put($annots.']');
+				$s .= $pl[5].' 0 R ';
+			$s .= ']';
+			$this->_put($s);
 		}
 		if($this->WithAlpha)
 			$this->_put('/Group <</Type /Group /S /Transparency /CS /DeviceRGB>>');
@@ -1750,23 +1739,52 @@ class tFPDF
 
 			$this->pages[$n] = str_replace($this->AliasNbPages,$this->page,$this->pages[$n]);
 		}
+
 		$this->_putstreamobject($this->pages[$n]);
+		// Annotations
+		foreach($this->PageLinks[$n] as $pl)
+		{
+			$this->_newobj();
+				$rect = sprintf('%.2F %.2F %.2F %.2F',$pl[0],$pl[1],$pl[0]+$pl[2],$pl[1]-$pl[3]);
+			$s = '<</Type /Annot /Subtype /Link /Rect ['.$rect.'] /Border [0 0 0] ';
+			if(is_string($pl[4]))
+				$s .= '/A <</S /URI /URI '.$this->_textstring($pl[4]).'>>>>';
+			else
+			{
+				$l = $this->links[$pl[4]];
+				if(isset($this->PageInfo[$l[0]]['size']))
+					$h = $this->PageInfo[$l[0]]['size'][1];
+				else
+					$h = ($this->DefOrientation=='P') ? $this->DefPageSize[1]*$this->k : $this->DefPageSize[0]*$this->k;
+				$s .= sprintf('/Dest [%d 0 R /XYZ 0 %.2F null]>>',$this->PageInfo[$l[0]]['n'],$h-$l[1]*$this->k);
+			}
+			$this->_put($s);
+			$this->_put('endobj');
+		}
 	}
 
 	protected function _putpages()
 	{
 		$nb = $this->page;
-		for($n=1;$n<=$nb;$n++)
-			$this->PageInfo[$n]['n'] = $this->n+1+2*($n-1);
-		for($n=1;$n<=$nb;$n++)
-			$this->_putpage($n);
+		$n = $this->n;
+		for($i=1;$i<=$nb;$i++)
+		{
+			$this->PageInfo[$i]['n'] = ++$n;
+			$n++;
+			foreach($this->PageLinks[$i] as &$pl)
+				$pl[5] = ++$n;
+			unset($pl);
+		}
+		for($i=1;$i<=$nb;$i++)
+			$this->_putpage($i);
 		// Pages root
 		$this->_newobj(1);
 		$this->_put('<</Type /Pages');
 		$kids = '/Kids [';
-		for($n=1;$n<=$nb;$n++)
-			$kids .= $this->PageInfo[$n]['n'].' 0 R ';
-		$this->_put($kids.']');
+		for($i=1;$i<=$nb;$i++)
+			$kids .= $this->PageInfo[$i]['n'].' 0 R ';
+		$kids .= ']';
+		$this->_put($kids);
 		$this->_put('/Count '.$nb);
 		if($this->DefOrientation=='P')
 		{
@@ -2056,7 +2074,7 @@ class tFPDF
 				}
 			}
 			if ((!isset($font['cw'][$cid*2]) || !isset($font['cw'][$cid*2+1])) ||
-            	($font['cw'][$cid*2] == "\00" && $font['cw'][$cid*2+1] == "\00")) { continue; }
+				($font['cw'][$cid*2] == "\00" && $font['cw'][$cid*2+1] == "\00")) { continue; }
 			$width = (ord($font['cw'][$cid*2]) << 8) + ord($font['cw'][$cid*2+1]);
 			if ($width == 65535) { $width = 0; }
 			if ($cid > 255 && (!isset($font['subset'][$cid]) || !$font['subset'][$cid])) { continue; }
@@ -2121,7 +2139,7 @@ class tFPDF
 			if (count(array_count_values($ws)) == 1) { $w .= ' '.$k.' '.($k + count($ws) - 1).' '.$ws[0]; }
 			else { $w .= ' '.$k.' [ '.implode(' ', $ws).' ]' . "\n"; }
 		}
-	$this->_out('/W ['.$w.' ]');
+		$this->_out('/W ['.$w.' ]');
 	}
 
 	protected function _tounicodecmap($uv)
