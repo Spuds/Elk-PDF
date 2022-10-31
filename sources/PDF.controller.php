@@ -3,10 +3,10 @@
 /**
  * @package "PDF" Addon for Elkarte
  * @author Spuds
- * @copyright (c) 2011-2021 Spuds
+ * @copyright (c) 2011-2022 Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.8
+ * @version 1.1.0
  *
  */
 
@@ -49,18 +49,11 @@ class PDF_Controller extends Action_Controller
 			unset($_REQUEST['action']);
 			$context['theme_loaded'] = false;
 
-			if (substr(FORUM_VERSION, 8, 3) === '1.1')
-			{
-				\Errors::instance()->fatal_lang_error('feature_disabled', false);
-			}
-			else
-			{
-				fatal_lang_error('feature_disabled', false);
-			}
+			\Errors::instance()->fatal_lang_error('feature_disabled', false);
 		}
 
 		// Clear out any template layers
-		$template_layers = Template_Layers::getInstance();
+		$template_layers = Template_Layers::instance();
 		$template_layers->removeAll();
 
 		// Get the topic information.
@@ -128,7 +121,7 @@ class PDF_Controller extends Action_Controller
 		$modSettings['pdf_hmargin'] = 15;
 
 		// Extra memory is always good with PDF creation
-		setMemoryLimit('128M');
+		detectServer()->setMemoryLimit('128M');
 
 		// Core PDF functions
 		require_once(EXTDIR . '/tfpdf.php');
@@ -209,16 +202,8 @@ class PDF_Controller extends Action_Controller
 				// Get the PDF output
 				$out = $pdf->Output($outputname, 'S', true);
 
-				// Set the output compression
-				if (!empty($modSettings['enableCompressedOutput']) && strlen($out) <= 4194304)
-				{
-					ob_start('ob_gzhandler');
-				}
-				else
-				{
-					ob_start();
-					header('Content-Encoding: none');
-				}
+				ob_start();
+				header('Content-Encoding: none');
 
 				// Output content to browser
 				header('Content-Type: application/pdf');
@@ -244,14 +229,7 @@ class PDF_Controller extends Action_Controller
 		}
 		catch (Exception $e)
 		{
-			if (substr(FORUM_VERSION, 8, 3) === '1.1')
-			{
-				throw new Elk_Exception($e->getMessage());
-			}
-			else
-			{
-				fatal_error($e->getMessage(), false);
-			}
+			throw new Elk_Exception($e->getMessage());
 		}
 	}
 
@@ -264,7 +242,7 @@ class PDF_Controller extends Action_Controller
 	 *
 	 * @param $filename
 	 * @param bool $beautify
-	 * @return mixed|string
+	 * @return string
 	 */
 	private function filter_filename($filename, $beautify = true)
 	{
@@ -288,7 +266,7 @@ class PDF_Controller extends Action_Controller
 	 * Make a name normal looking after illegal characters have been replaced
 	 *
 	 * @param $filename
-	 * @return mixed|string
+	 * @return string
 	 */
 	private function beautify_filename($filename)
 	{
