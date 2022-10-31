@@ -3,10 +3,10 @@
 /**
  * @package "PDF" Addon for Elkarte
  * @author Spuds
- * @copyright (c) 2011-2021 Spuds
+ * @copyright (c) 2011-2022 Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.0.8
+ * @version 1.1.0
  *
  */
 
@@ -14,8 +14,6 @@ class ElkPdf extends tFPDF
 {
 	/** @var string Current href src */
 	private $_href = '';
-	/** @var int Total width of images in a line of images */
-	private $image_line = 0;
 	/** @var int Tallest image in a line */
 	private $image_height = 0;
 	/** @var int Page width less margins */
@@ -70,8 +68,8 @@ class ElkPdf extends tFPDF
 
 		foreach ($a as $i => $e)
 		{
-			// Between the tags, is the text
-			if ($i % 2 == 0)
+			// Between the tags, is text
+			if ($i % 2 === 0)
 			{
 				// Text or link text?
 				if ($this->_href)
@@ -84,31 +82,27 @@ class ElkPdf extends tFPDF
 				}
 			}
 			// HTML Tag
+			elseif ($e[0] === '/')
+			{
+				$this->_close_tag(trim(substr($e, 1)));
+			}
 			else
 			{
-				// Ending Tag?
-				if ($e[0] === '/')
-				{
-					$this->_close_tag(trim(substr($e, 1)));
-				}
-				else
-				{
-					// Opening Tag
-					$a2 = explode(' ', $e);
-					$tag = array_shift($a2);
+				// Opening Tag
+				$a2 = explode(' ', $e);
+				$tag = array_shift($a2);
 
-					// Extract any attributes
-					$attr = array();
-					foreach ($a2 as $value)
+				// Extract any attributes
+				$attr = array();
+				foreach ($a2 as $value)
+				{
+					if (preg_match('~([^=]*)=["\']?([^"\']*)~', $value, $a3))
 					{
-						if (preg_match('~([^=]*)=["\']?([^"\']*)~', $value, $a3))
-						{
-							$attr[strtolower($a3[1])] = $a3[2];
-						}
+						$attr[strtolower($a3[1])] = $a3[2];
 					}
-
-					$this->_open_tag($tag, $attr);
 				}
+
+				$this->_open_tag($tag, $attr);
 			}
 		}
 	}
@@ -153,7 +147,7 @@ class ElkPdf extends tFPDF
 	 * Used to convert opening html tags to a corresponding fPDF style
 	 *
 	 * @param string $tag
-	 * @param mixed[] $attr
+	 * @param array $attr
 	 */
 	private function _open_tag($tag, $attr)
 	{
@@ -193,8 +187,12 @@ class ElkPdf extends tFPDF
 			case 'img':
 				$this->_add_image($attr);
 				break;
+			case 'ul':
+			case 'ol':
+				$this->line_height = 6;
+				break;
 			case 'li':
-				$this->Ln($this->line_height);
+				//$this->Ln($this->line_height);
 				$this->SetTextColor(190, 0, 0);
 				$this->Write($this->line_height, '     » ');
 				$this->_elk_set_text_color(-1);
@@ -215,8 +213,8 @@ class ElkPdf extends tFPDF
 				// If its the start of a quote block
 				if (isset($attr['class']) && strpos($attr['class'], 'quoteheader') !== false)
 				{
-					// Need to track the first quote so we can tag the border box start
-					if ($this->in_quote == 0)
+					// Need to track the first quote, so we can tag the border box start
+					if ($this->in_quote === 0)
 					{
 						$this->quote_start_y = $this->GetY();
 						$this->SetFont($this->font_face, '', 8);
@@ -288,6 +286,10 @@ class ElkPdf extends tFPDF
 				break;
 			case 'a':
 				$this->_href = '';
+				break;
+			case 'ul':
+			case 'ol':
+				$this->line_height = 5;
 				break;
 		}
 	}
@@ -504,7 +506,7 @@ class ElkPdf extends tFPDF
 		$this->_draw_line();
 		$this->Ln(2);
 		$this->AutoPageBreak = false;
-		$this->image_line = 0;
+		$image_line = 0;
 
 		foreach ($this->attachments as $a)
 		{
@@ -537,13 +539,13 @@ class ElkPdf extends tFPDF
 				list($a['width'], $a['height']) = $this->_scale_image($a['width'], $a['height']);
 
 				// Does it fit on this row
-				$this->image_line += $a['width'];
-				if ($this->image_line >= $this->page_width)
+				$image_line += $a['width'];
+				if ($image_line >= $this->page_width)
 				{
 					// New row, move the cursor down to the next row based on the tallest image
 					$this->Ln($this->image_height + 2);
 					$this->image_height = 0;
-					$this->image_line = $a['width'];
+					$image_line = $a['width'];
 				}
 
 				// Does it fit on this page, or is a new one needed?
@@ -551,7 +553,7 @@ class ElkPdf extends tFPDF
 				{
 					$this->AddPage();
 					$this->image_height = 0;
-					$this->image_line = $a['width'];
+					$image_line = $a['width'];
 				}
 
 				// Detect and repair interlaced PNG files.
@@ -564,7 +566,7 @@ class ElkPdf extends tFPDF
 				$this->Image($a['filename'], $this->x, $this->y, $a['width'], $a['height'], $type);
 				$this->Cell($a['width'] + 2, $a['height'], '', 0, 0, 'L', false);
 
-				$this->image_line += 2;
+				$image_line += 2;
 
 				// Cleanup if needed
 				if ($a['filename'] === $this->temp_file)
@@ -593,12 +595,12 @@ class ElkPdf extends tFPDF
 		$success = false;
 
 		// Open the file and check the interlaced" flag it's byte 13 of the iHDR
-		$handle = fopen($filename, 'r');
+		$handle = fopen($filename, 'rb');
 		$contents = fread($handle, 32);
 		fclose($handle);
 
 		// If the interlace flag is on, lets try to de-interlace it to a temp file
-		if (ord($contents[28]) != 0)
+		if (ord($contents[28]) !== 0)
 		{
 			require_once(SUBSDIR . '/Graphics.subs.php');
 
@@ -624,7 +626,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Inserts images with left "in line: alignment.  Only one image per line with wrapped text.
 	 *
-	 * @param mixed[] $attr
+	 * @param array $attr
 	 */
 	private function _add_image($attr)
 	{
@@ -747,7 +749,8 @@ class ElkPdf extends tFPDF
 			return '';
 		}
 
-		if ((strpos($name, $boardurl) !== false && in_array($pathinfo['extension'], $this->_validImageTypes)) || $pathinfo['extension'] === 'gal')
+		if ($pathinfo['extension'] === 'gal' ||
+			(strpos($name, $boardurl) !== false && in_array($pathinfo['extension'], $this->_validImageTypes, true)))
 		{
 			// Gallery image?
 			if ($pathinfo['extension'] === 'gal')
@@ -786,8 +789,8 @@ class ElkPdf extends tFPDF
 	private function _scale_image($width, $height)
 	{
 		// Normalize to page units
-		$width = $this->_px2mm($width);
-		$height = $this->_px2mm($height);
+		$width = (int) $this->_px2mm($width);
+		$height = (int) $this->_px2mm($height);
 		$across = 2;
 		$down = 2;
 
@@ -906,7 +909,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Print a page header, called automatically by fPDF
 	 */
-	public function header()
+	public function Header()
 	{
 		global $context, $txt;
 
@@ -933,7 +936,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Output a page footer, called automatically by fPDF
 	 */
-	public function footer()
+	public function Footer()
 	{
 		global $scripturl, $topic, $mbname, $txt, $context;
 
@@ -958,7 +961,7 @@ class ElkPdf extends tFPDF
 		static $_r = 0, $_g = 0, $_b = 0;
 
 		// Repeat the current color
-		if ($r == -1)
+		if ($r === -1)
 		{
 			$this->SetTextColor($_r, $_g, $_b);
 		}
@@ -982,12 +985,13 @@ class ElkPdf extends tFPDF
 	private function _set_style($tag, $enable)
 	{
 		// Keep track of the style depth / nesting
+		$this->{$tag} = $this->{$tag} ?? 0;
 		$this->{$tag} += ($enable ? 1 : -1);
 
 		$style = '';
 		foreach (array('b', 'i', 'u') as $s)
 		{
-			if ($this->{$s} > 0)
+			if (isset($this->{$s}) && $this->{$s} > 0)
 			{
 				$style .= $s;
 			}
@@ -1150,7 +1154,7 @@ class VariableStream
 		switch ($whence)
 		{
 			case SEEK_SET:
-				if ($offset < strlen($GLOBALS[$this->varname]) && $offset >= 0)
+				if ($offset >= 0 && $offset < strlen($GLOBALS[$this->varname]))
 				{
 					$this->position = $offset;
 				}
