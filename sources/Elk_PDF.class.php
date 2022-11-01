@@ -40,8 +40,8 @@ class ElkPdf extends tFPDF
 	private $image_info;
 	/** @var string Primary font face to use in the PDF, 'DejaVu' or 'OpenSans' */
 	private $font_face = 'OpenSans';
-	/** @var string Temp file if needed for de interlace */
-	private $temp_file = CACHEDIR . '/pdf-print.temp.png';
+	/** @var string Temp file if needed for image manipulations */
+	private $temp_file;
 	/** @var array holds attachment array data for a single message */
 	private $attachments;
 	/** @var int[] holds ids of ILA attachments we have used */
@@ -192,7 +192,6 @@ class ElkPdf extends tFPDF
 				$this->line_height = 6;
 				break;
 			case 'li':
-				//$this->Ln($this->line_height);
 				$this->SetTextColor(190, 0, 0);
 				$this->Write($this->line_height, '     » ');
 				$this->_elk_set_text_color(-1);
@@ -508,14 +507,14 @@ class ElkPdf extends tFPDF
 		$this->AutoPageBreak = false;
 		$image_line = 0;
 
-		foreach ($this->attachments as $a)
+		foreach ($this->attachments as $attachment)
 		{
-			if (isset($this->dontShowBelow[$a['id_attach']]))
+			if (isset($this->dontShowBelow[$attachment['id_attach']]))
 			{
 				continue;
 			}
 
-			switch ($a['mime_type'])
+			switch ($attachment['mime_type'])
 			{
 				case 'image/jpeg':
 				case 'image/jpg':
@@ -527,49 +526,61 @@ class ElkPdf extends tFPDF
 				case 'image/gif':
 					$type = 'GIF';
 					break;
+				case 'image/webp':
+					$type = 'WEBP';
+					break;
+				case 'image/bmp':
+					$type = 'BMP';
+					break;
 				default:
 					$type = '';
 					break;
 			}
 
-			// Its an image type fPDF understands
+			// Convert formats tfpdf does not support
+			if ($type === 'WEBP' || $type === 'BMP')
+			{
+				$type = $this->convertImage($attachment, $type);
+			}
+
+			// Detect and repair interlaced PNG files.
+			if ($type === 'PNG')
+			{
+				$this->deInterlace($attachment);
+			}
+
+			// An image type fPDF understands
 			if (!empty($type))
 			{
 				// Scale to fit in our grid as required
-				list($a['width'], $a['height']) = $this->_scale_image($a['width'], $a['height']);
+				list($attachment['width'], $attachment['height']) = $this->_scale_image($attachment['width'], $attachment['height']);
 
 				// Does it fit on this row
-				$image_line += $a['width'];
+				$image_line += $attachment['width'];
 				if ($image_line >= $this->page_width)
 				{
 					// New row, move the cursor down to the next row based on the tallest image
 					$this->Ln($this->image_height + 2);
 					$this->image_height = 0;
-					$image_line = $a['width'];
+					$image_line = $attachment['width'];
 				}
 
 				// Does it fit on this page, or is a new one needed?
-				if ($this->y + $a['height'] > $this->h - 6)
+				if ($this->y + $attachment['height'] > $this->h - 6)
 				{
 					$this->AddPage();
 					$this->image_height = 0;
-					$image_line = $a['width'];
+					$image_line = $attachment['width'];
 				}
 
-				// Detect and repair interlaced PNG files.
-				if ($type === 'PNG')
-				{
-					$a['filename'] = $this->deInterlace($a['filename']);
-				}
-
-				$this->image_height = max($this->image_height, $a['height']);
-				$this->Image($a['filename'], $this->x, $this->y, $a['width'], $a['height'], $type);
-				$this->Cell($a['width'] + 2, $a['height'], '', 0, 0, 'L', false);
+				$this->image_height = max($this->image_height, $attachment['height']);
+				$this->Image($attachment['filename'], $this->x, $this->y, $attachment['width'], $attachment['height'], $type);
+				$this->Cell($attachment['width'] + 2, $attachment['height'], '', 0, 0, 'L', false);
 
 				$image_line += 2;
 
 				// Cleanup if needed
-				if ($a['filename'] === $this->temp_file)
+				if ($attachment['filename'] === $this->temp_file)
 				{
 					@unlink($this->temp_file);
 				}
@@ -583,36 +594,86 @@ class ElkPdf extends tFPDF
 	}
 
 	/**
+	 * Currently tfpdf does not support webp or bmp, so we convert those
+	 * to PNG (could use JPG as well, but have potential alpha png)
+	 *
+	 * @param $attachment
+	 * @param $type
+	 * @return string
+	 */
+	public function convertImage(&$attachment, $type)
+	{
+		require_once(SUBSDIR . '/Graphics.subs.php');
+
+		$success = false;
+
+		// No webp support on the server
+		if ($type === 'WEBP' && !hasWebpSupport())
+		{
+			return '';
+		}
+
+		$this->temp_file = CACHEDIR . '/' . $attachment['file_hash'] . '.gal';
+		if (checkImagick())
+		{
+			$image = new Imagick($attachment['filename']);
+			$image->setImageFormat ('png');
+			$success = $image->writeImage($this->temp_file);
+			$image->clear();
+		}
+		elseif (checkGD())
+		{
+			$image = imagecreatefrompng($attachment['filename']);
+			imagealphablending($image, false);
+			imagesavealpha($image, true);
+			imageinterlace($image, 0);
+			$success = imagepng($image, $this->temp_file);
+		}
+
+		if ($success)
+		{
+			$attachment['filename'] = $this->temp_file;
+			$attachment['mime_type'] = 'image/png';
+
+			return 'PNG';
+		}
+
+		@unlink($this->temp_file);
+
+		return '';
+	}
+
+	/**
 	 * The pdf parser only likes none interlaced images.  This will
 	 * use GD or Imagik functions to create a new standard image for
 	 * insertion.
 	 *
-	 * @param string $filename
-	 * @return string
+	 * @param array $attachment
 	 */
-	public function deInterlace($filename)
+	public function deInterlace(&$attachment)
 	{
 		$success = false;
 
-		// Open the file and check the interlaced" flag it's byte 13 of the iHDR
-		$handle = fopen($filename, 'rb');
+		// Open the file and check the "interlaced" flag at byte 13 of the iHDR
+		$handle = fopen($attachment['filename'], 'rb');
 		$contents = fread($handle, 32);
 		fclose($handle);
 
-		// If the interlace flag is on, lets try to de-interlace it to a temp file
+		// The interlace flag is on, try to de-interlace to a temp file
 		if (ord($contents[28]) !== 0)
 		{
 			require_once(SUBSDIR . '/Graphics.subs.php');
 
+			$this->temp_file = CACHEDIR . '/' . $attachment['file_hash'] . '.gal';
 			if (checkImagick())
 			{
-				$image = new Imagick($filename);
+				$image = new Imagick($attachment['filename']);
 				$success = $image->writeImage($this->temp_file);
 				$image->clear();
 			}
 			elseif (checkGD())
 			{
-				$image = imagecreatefrompng($filename);
+				$image = imagecreatefrompng($attachment['filename']);
 				imagealphablending($image, false);
 				imagesavealpha($image, true);
 				imageinterlace($image, 0);
@@ -620,11 +681,14 @@ class ElkPdf extends tFPDF
 			}
 		}
 
-		return $success ? $this->temp_file : $filename;
+		if ($success)
+		{
+			$attachment['filename'] = $this->temp_file;
+		}
 	}
 
 	/**
-	 * Inserts images with left "in line: alignment.  Only one image per line with wrapped text.
+	 * Inserts images with left "in line" alignment.  Only one image per line with wrapped text.
 	 *
 	 * @param array $attr
 	 */
@@ -650,7 +714,7 @@ class ElkPdf extends tFPDF
 			$this->_setImageAttr($attr);
 			list($thumbwidth, $thumbheight) = $this->_scale_image($attr['width'], $attr['height']);
 
-			// If we output a previous image "inline" are we now need to be below that previous image
+			// If we output a previous image "inline" then we need to be below the previous image
 			// before we plop in this new image
 			if ($this->y < $this->ila_height)
 			{
@@ -696,7 +760,7 @@ class ElkPdf extends tFPDF
 		// Set the type based on what was loaded
 		$attr['type'] = $this->_validImageTypes[(int) $this->image_info[2]];
 
-		// If no specific width/height was on the image tag, check if its in the style
+		// If no specific width/height was on the image tag, check in the style
 		if (isset($attr['style']) && (!isset($attr['width']) && !isset($attr['height'])))
 		{
 			// Extract the style width and height
@@ -904,6 +968,7 @@ class ElkPdf extends tFPDF
 	public function end_message()
 	{
 		$this->Ln(!empty($this->ila_height) ? $this->ila_height - $this->y : 10);
+		$this->ila_height = 0;
 	}
 
 	/**
