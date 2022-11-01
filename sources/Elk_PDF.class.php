@@ -608,7 +608,7 @@ class ElkPdf extends tFPDF
 		$success = false;
 
 		// No webp support on the server
-		if ($type === 'WEBP' && !hasWebpSupport())
+		if ($type === 'WEBP' && function_exists('hasWebpSupport') && !hasWebpSupport())
 		{
 			return '';
 		}
