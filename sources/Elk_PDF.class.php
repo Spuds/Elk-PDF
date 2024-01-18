@@ -3,58 +3,60 @@
 /**
  * @package "PDF" Addon for Elkarte
  * @author Spuds
- * @copyright (c) 2011-2022 Spuds
+ * @copyright (c) 2011-2024 Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.1.0
+ * @version 1.2.0
  *
  */
 
 class ElkPdf extends tFPDF
 {
-	/** @var string Current href src */
-	private $_href = '';
-	/** @var int Tallest image in a line */
-	private $image_height = 0;
-	/** @var int Page width less margins */
-	private $page_width;
-	/** @var int Page height less margins */
-	private $page_height;
-	/** @var int If we are in a quote or not */
-	private $in_quote = 0;
-	/** @var int Start position of a quote block, used to draw a box */
-	private $quote_start_y;
-	/** @var int Line height for breaks etc */
-	private $line_height = 5;
-	/** @var string The html that will be parsed */
-	private $html = '';
-	/** @var bool If this the first node, used to prevent excess whitespace at start */
-	private $_first_node = true;
-	/** @var string[] Image types we support */
-	private $_validImageTypes = array(1 => 'gif', 2 => 'jpg', 3 => 'png', 9 => 'jpg');
-	/** @var object holds html object from dom parser str_get_html */
-	private $doc;
-	/** @var string holds loaded image data */
-	private $image_data;
-	/** @var array holds results of getimagesize */
-	private $image_info;
-	/** @var string Primary font face to use in the PDF, 'DejaVu' or 'OpenSans' */
-	private $font_face = 'OpenSans';
-	/** @var string Temp file if needed for image manipulations */
-	private $temp_file;
-	/** @var array holds attachment array data for a single message */
-	private $attachments;
-	/** @var int[] holds ids of ILA attachments we have used */
-	private $dontShowBelow;
-	/** @var int current line height position, used to force linebreak on next image */
-	private $ila_height = 0;
+	/** Current href src */
+	private string $_href = '';
+	/** Tallest image in a line */
+	private int $image_height = 0;
+	/** Page width less margins */
+	private int $page_width = 0;
+	/** Page height less margins */
+	private int $page_height = 0;
+	/** If we are in a quote or not */
+	private int $in_quote = 0;
+	/** Start position of a quote block, used to draw a box */
+	private int $quote_start_y = 0;
+	/** Line height for breaks etc */
+	private int $line_height = 5;
+	/** The html that will be parsed */
+	private string $html = '';
+	/** If this the first node, used to prevent excess whitespace at start */
+	private bool $_first_node = true;
+	/** Image types we support */
+	private array $_validImageTypes = array(1 => 'gif', 2 => 'jpg', 3 => 'png', 9 => 'jpg');
+	/** holds html object from dom parser str_get_html */
+	private object $doc;
+	/** holds loaded image data */
+	private string $image_data;
+	/** @var array|bool holds results of getimagesize */
+	private $image_info = [];
+	/** Primary font face to use in the PDF, 'DejaVu' or 'OpenSans' */
+	private string $font_face = 'OpenSans';
+	/** Temp file if needed for image manipulations */
+	private string $temp_file = '';
+	/** holds attachment array data for a single message */
+	private array $attachments = [];
+	/** holds ids of ILA attachments we have used */
+	private array $dontShowBelow = [];
+	/** current line height position, used to force linebreak on next image */
+	private int $ila_height = 0;
+    /** Tracks usage of ila style images so we clear after the last one */
+	private int $ila_image_count = -1;
 
 	/**
 	 * Converts a block of HTML to appropriate fPDF commands
 	 *
 	 * @param string $html
 	 */
-	public function write_html($html)
+	public function write_html(string $html): void
 	{
 		// Prepare the html for PDF-ifiing
 		$this->html = $html;
@@ -110,7 +112,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Cleans up the HTML by removing tags / blocks that we can not render
 	 */
-	private function _prepare_html()
+	private function _prepare_html(): void
 	{
 		global $context;
 
@@ -126,9 +128,11 @@ class ElkPdf extends tFPDF
 		// Add "tabs" for the code blocks
 		$this->html = str_replace('<span class="tab"></span>', '    ', $this->html);
 
-		// The external lib is easier to use for class searches
-		require_once(EXTDIR . '/simple_html_dom.php');
-		$this->doc = str_get_html($this->html, true, true, 'UTF-8', false);
+		// Create a new instance of DOMDocument
+		$this->doc = new \DOMDocument();
+
+		// Load the HTML into the instance
+		$this->doc->loadHTML(mb_convert_encoding($this->html, 'HTML-ENTITIES', 'UTF-8'));
 
 		// ILA's will be shown in the post text, but only left aligned
 		$this->_prepare_ila();
@@ -136,7 +140,8 @@ class ElkPdf extends tFPDF
 		// Gallery's are kind of special, see this function for ways to deal with them
 		$this->_prepare_gallery();
 
-		$this->html = $this->doc->save();
+		// Save the updated HTML from the instance, remove the DOCTYPE, html and body tags automatically added
+		$this->html = preg_replace('~<(?:!DOCTYPE|/?(?:html|body))[^>]*>\s*~i', '', $this->doc->saveHTML());
 
 		// Clean it up for proper printing
 		$this->html = html_entity_decode(un_htmlspecialchars($this->html), ENT_QUOTES, 'UTF-8');
@@ -149,7 +154,7 @@ class ElkPdf extends tFPDF
 	 * @param string $tag
 	 * @param array $attr
 	 */
-	private function _open_tag($tag, $attr)
+	private function _open_tag(string $tag, array $attr): void
 	{
 		$tag = strtolower($tag);
 
@@ -200,13 +205,32 @@ class ElkPdf extends tFPDF
 			case 'p':
 				if (!$this->_first_node)
 				{
-					$this->Ln($this->line_height);
+					if ($this->ila_image_count === 0)
+					{
+						$this->Ln($this->ila_height - $this->y);
+						$this->ila_image_count = -1;
+						$this->ila_height = 0;
+					}
+					else
+					{
+						$this->Ln($this->line_height);
+					}
 				}
 				break;
 			case 'div':
 				if (!$this->_first_node)
 				{
-					$this->Ln($this->line_height);
+					if ($this->ila_image_count === 0)
+					{
+						$this->Ln($this->ila_height - $this->y);
+						$this->ila_image_count = -1;
+						$this->ila_height = 0;
+
+					}
+					else
+					{
+						$this->Ln($this->line_height);
+					}
 				}
 
 				// If its the start of a quote block
@@ -246,7 +270,7 @@ class ElkPdf extends tFPDF
 	 *
 	 * @param string $tag
 	 */
-	private function _close_tag($tag)
+	private function _close_tag(string $tag): void
 	{
 		$tag = strtolower($tag);
 
@@ -296,7 +320,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Start a new page
 	 */
-	public function begin_page()
+	public function begin_page(): void
 	{
 		$this->AddPage();
 		$this->_get_page_width();
@@ -309,7 +333,7 @@ class ElkPdf extends tFPDF
 	 *
 	 * @return boolean
 	 */
-	public function AcceptPageBreak()
+	public function AcceptPageBreak(): bool
 	{
 		// If in a quote block, close the current outline box
 		if ($this->in_quote > 0)
@@ -323,7 +347,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Draws a rectangular box around a quote block
 	 */
-	private function _draw_box()
+	private function _draw_box(): void
 	{
 		$this->Rect($this->lMargin, $this->quote_start_y, ($this->w - $this->rMargin - $this->lMargin), ($this->GetY() - $this->quote_start_y), 'D');
 	}
@@ -334,7 +358,7 @@ class ElkPdf extends tFPDF
 	 * @param string $url
 	 * @param string $caption
 	 */
-	private function _add_link($url, $caption = '')
+	private function _add_link(string $url, string $caption = ''): void
 	{
 		// Underline blue text for links
 		$this->SetTextColor(0, 0, 255);
@@ -350,23 +374,31 @@ class ElkPdf extends tFPDF
 	 * Finds ILA DNA in the markup and replaces the wrapped <a link+img> with a new
 	 * img only tag set to local src for the attachment
 	 */
-	private function _prepare_ila()
+	private function _prepare_ila(): void
 	{
-		$elements = $this->doc->find('a[id] img.bbc_img');
+		// ILA <img> has class .bbc_img, a below message will have .attachment_image
+		$xpath = new \DOMXPath($this->doc);
+		$elements = $xpath->query('//a[@id]//img[contains(@class, "bbc_img")]');
+
 		foreach ($elements as $node)
 		{
-			$parent = $node->parent();
-			$ilaDetected = strpos($node->src, 'dlattach') !== false && array_key_exists('data-lightboximage', $parent->attr);
+			$parent = $node->parentNode;
+			$ilaDetected = strpos($node->getAttribute('src'), 'dlattach') !== false && $parent->hasAttribute('data-lightboximage');
 			if ($ilaDetected)
 			{
-				$attach_id = $parent->attr['data-lightboximage'];
+				$attach_id = $parent->getAttribute('data-lightboximage');
 				$attach = $this->find_attachment($attach_id);
 				if ($attach !== false)
 				{
-					$parent->outertext = '<img src="' . $attach['filename'] . '.gal">';
+					$newNode = $this->doc->createElement('img');
+					$newNode->setAttribute('src', $attach['filename'] . '.gal');
+					$parent->parentNode->replaceChild($newNode, $parent);
+
 					$this->dontShowBelow[$attach['id_attach']] = $attach['id_attach'];
 				}
 			}
+
+			$this->ila_image_count = empty($this->dontShowBelow) ? -1 : count($this->dontShowBelow);
 		}
 	}
 
@@ -376,12 +408,12 @@ class ElkPdf extends tFPDF
 	 * @param int $id
 	 * @return false|mixed
 	 */
-	private function find_attachment($id)
+	private function find_attachment(int $id)
 	{
 		// id_attach, id_msg, approved, width", height, file_hash, filename, id_folder, mime_type
 		foreach ($this->attachments as $attachment)
 		{
-			if ($attachment['id_attach'] = $id)
+			if ((int) $attachment['id_attach'] === $id)
 			{
 				return $attachment;
 			}
@@ -395,94 +427,61 @@ class ElkPdf extends tFPDF
 	 * locally via _fetch_image().  Sets a .gal extension, used to let _fetch_image
 	 * know that its a local file to load.
 	 */
-	private function _prepare_gallery()
+	private function _prepare_gallery(): void
 	{
 		if (file_exists(SOURCEDIR . '/levgal_src/LevGal-Bootstrap.php'))
 		{
-			return $this->_process_levgal_items();
-		}
-
-		if (file_exists(SOURCEDIR . '/Aeva-Media.php'))
-		{
-			return $this->_process_aeva_items();
+			$this->_process_levgal_items();
 		}
 	}
 
 	/**
-	 * We called levgal processPBE as part of the prepare html phase to generate links.
+	 * Process legal items by replacing a link with an image element.
+	 *
+	 * This method uses DOMXPath to query for elements with a class containing "levgal".
+	 * It then replaces each matching element with a new image element.
+	 *
+	 * @return void
 	 */
-	private function _process_levgal_items()
+	private function _process_levgal_items(): void
 	{
-		// All the gallery links
-		$elements = $this->doc->find('a.levgal');
+		$xpath = new \DOMXPath($this->doc);
+		$elements = $xpath->query('//a[contains(@class, "levgal")]');
+
 		foreach ($elements as $node)
 		{
-			// Set the image src to the file location so it can be fetched.
-			$node->outertext = '<img src="' . str_replace('/item/', '/file/', $node->href) . 'preview/.gal">';
+			$fileName = str_replace('/item/', '/file/', $node->getAttribute('href')) . 'preview/.gal';
+
+			// The fileName will only work for a guest level file, so lets check it ourselfs
+			$query = parse_url($node->getAttribute('href'));
+			if (preg_match('~^media\/item\/([a-z0-9%-]+\.\d+)?\/?$~i', $query['query'], $matches) === 1)
+			{
+				[$slug, $id] = explode('.', $matches[1]);
+
+				$itemModel = new LevGal_Model_Item();
+				$item_details = $itemModel->getFileInfoById($id);
+				$item_paths = $itemModel->getFilePaths();
+
+				// Do we have a valid item?
+				if (!empty($item_details) && !empty($item_paths['preview']) && $item_details['item_slug'] === $slug && $itemModel->isVisible())
+				{
+					$fileName = $item_paths['preview'] . '.gal';
+				}
+			}
+
+			$newNode = $this->doc->createElement('img');
+			$newNode->setAttribute('src', $fileName);
+
+			$node->parentNode->replaceChild($newNode, $node);
 		}
-
-		return true;
-	}
-
-	/**
-	 * If you spun your own version that works with Elk, then this is a potential way to
-	 * deal with the smg attach tags and markup.  Not tested but should work.
-	 */
-	private function _process_aeva_items()
-	{
-		global $settings;
-		static $loaded = false;
-
-		if (!$loaded)
-		{
-			// Dependencies
-			require_once(SUBSDIR . '/Aeva-Subs.php');
-			aeva_loadSettings();
-
-			// Remove extra markup not needed
-			$elements = $this->doc->find('div.caption');
-			foreach ($elements as $node)
-			{
-				$node->outertext = '';
-			}
-
-			$loaded = true;
-		}
-
-		// All the gallery links
-		$elements = $this->doc->find('table.aextbox td a');
-		foreach ($elements as $node)
-		{
-			// Get the id
-			$type = 'preview';
-			$id = '';
-			if (preg_match('~.*in=(\d+).*~', $node->href, $match))
-			{
-				$id = (int) $match[1];
-			}
-
-			if (empty($id) || !aeva_allowedTo('access'))
-			{
-				$path = $settings['theme_dir'] . '/images/aeva/denied.png';
-			}
-			else
-			{
-				list($path, ,) = aeva_getMediaPath($id, $type);
-			}
-
-			// Set the image src to the file location so it can be fetched.
-			$node->parent()->outertext = '<img src="' . (!empty($path) ? $path : $settings['theme_dir'] . '/images/aeva/denied.png') . '.gal">';
-		}
-
-		return true;
 	}
 
 	/**
 	 * Sets attachments array to the class
 	 *
-	 * @param $attach
+	 * @param array $attach
 	 */
-	public function set_attachments($attach)
+	public function set_attachments(array $attach): void
 	{
 		$this->attachments = $attach;
 	}
@@ -491,7 +490,7 @@ class ElkPdf extends tFPDF
 	 * Inserts images below the post text
 	 * Attempts to place as many on a single line as possible
 	 */
-	public function add_attachments()
+	public function add_attachments(): void
 	{
 		if (!empty($this->ila_height))
 		{
@@ -553,7 +552,7 @@ class ElkPdf extends tFPDF
 			if (!empty($type))
 			{
 				// Scale to fit in our grid as required
-				list($attachment['width'], $attachment['height']) = $this->_scale_image($attachment['width'], $attachment['height']);
+				[$attachment['width'], $attachment['height']] = $this->_scale_image($attachment['width'], $attachment['height']);
 
 				// Does it fit on this row
 				$image_line += $attachment['width'];
@@ -597,11 +596,11 @@ class ElkPdf extends tFPDF
 	 * Currently tfpdf does not support webp or bmp, so we convert those
 	 * to PNG (could use JPG as well, but have potential alpha png)
 	 *
-	 * @param $attachment
-	 * @param $type
+	 * @param array $attachment
+	 * @param string $type
 	 * @return string
 	 */
-	public function convertImage(&$attachment, $type)
+	public function convertImage(array &$attachment, string $type): string
 	{
 		require_once(SUBSDIR . '/Graphics.subs.php');
 
@@ -644,13 +643,13 @@ class ElkPdf extends tFPDF
 	}
 
 	/**
-	 * The pdf parser only likes none interlaced images.  This will
-	 * use GD or Imagik functions to create a new standard image for
+	 * The pdf parser only works with none interlaced images.  This will
+	 * use GD or Imagick functions to create a new standard image for
 	 * insertion.
 	 *
 	 * @param array $attachment
 	 */
-	public function deInterlace(&$attachment)
+	public function deInterlace(array &$attachment): void
 	{
 		$success = false;
 
@@ -692,7 +691,7 @@ class ElkPdf extends tFPDF
 	 *
 	 * @param array $attr
 	 */
-	private function _add_image($attr)
+	private function _add_image(array $attr): void
 	{
 		// With a source lets fetch it
 		if (isset($attr['src']))
@@ -703,6 +702,7 @@ class ElkPdf extends tFPDF
 			// Nothing loaded, or not an image we process or ... show a link instead
 			if (empty($this->image_data) || empty($this->image_info) || !isset($this->_validImageTypes[$this->image_info[2]]))
 			{
+				$this->ila_image_count--;
 				$caption = pathinfo($attr['src']);
 				$caption = ' [ ' . (!empty($attr['title']) ? $attr['title'] : $caption['basename']) . ' ] ';
 				$this->_add_link($attr['src'], $caption);
@@ -712,9 +712,9 @@ class ElkPdf extends tFPDF
 
 			// Some scaling may be needed to conform to our 2x2 grid
 			$this->_setImageAttr($attr);
-			list($thumbwidth, $thumbheight) = $this->_scale_image($attr['width'], $attr['height']);
+			[$thumbwidth, $thumbheight] = $this->_scale_image($attr['width'], $attr['height']);
 
-			// If we output a previous image "inline" then we need to be below the previous image
+			// If we output a previous image "inline" then we need to add this image below the previous
 			// before we plop in this new image
 			if ($this->y < $this->ila_height)
 			{
@@ -736,13 +736,20 @@ class ElkPdf extends tFPDF
 			$smiley = $thumbheight < 18;
 			if (!$smiley)
 			{
+				$this->ila_image_count--;
 				$this->ila_height = ceil($this->y + $thumbheight + 2);
+
+				// Already in a line, break to a newline
+				if ($this->x > $this->lMargin)
+				{
+					$this->Ln(1);
+				}
 			}
 
 			// Output the image
 			$this->Image('elkimg://' . $elkimg, $this->x, $this->y, $thumbwidth, $thumbheight, $attr['type'] ?? '');
 
-			// Wrap the image with a cell, newline if its not a smiley
+			// Wrap the image in a left aligned cell
 			$this->Cell($thumbwidth + 2, $thumbheight, $smiley ? ' ' : '', 0, 0, 'L', false);
 
 			unset($GLOBALS[$elkimg], $this->image_data, $this->image_info);
@@ -753,9 +760,9 @@ class ElkPdf extends tFPDF
 	 * Sets image attributes either from the html tag or from what we can determine from the
 	 * image data
 	 *
-	 * @param $attr
+	 * @param array $attr
 	 */
-	private function _setImageAttr(&$attr)
+	private function _setImageAttr(array &$attr): void
 	{
 		// Set the type based on what was loaded
 		$attr['type'] = $this->_validImageTypes[(int) $this->image_info[2]];
@@ -796,9 +803,9 @@ class ElkPdf extends tFPDF
 	 * Given an image URL simply load its data to memory
 	 *
 	 * @param string $name
-	 * @return string '' if no path extension found
+	 * @return void '' if no path extension found
 	 */
-	private function _fetch_image($name)
+	private function _fetch_image(string $name): void
 	{
 		global $boardurl;
 
@@ -810,7 +817,7 @@ class ElkPdf extends tFPDF
 		// Not going to look then
 		if (!isset($pathinfo['extension']))
 		{
-			return '';
+			return;
 		}
 
 		if ($pathinfo['extension'] === 'gal' ||
@@ -850,7 +857,7 @@ class ElkPdf extends tFPDF
 	 *
 	 * @return array (width, height)
 	 */
-	private function _scale_image($width, $height)
+	private function _scale_image(int $width, int $height): array
 	{
 		// Normalize to page units
 		$width = (int) $this->_px2mm($width);
@@ -865,27 +872,27 @@ class ElkPdf extends tFPDF
 		// Some scaling may be needed, does the image even fit on a page?
 		if ($max_width < $width && $width >= $height)
 		{
-			$thumbwidth = $max_width;
-			$thumbheight = ($max_width / $width) * $height;
+			$thumbWidth = $max_width;
+			$thumbHeight = ($max_width / $width) * $height;
 		}
 		elseif ($max_height < $height && $height >= $width)
 		{
-			$thumbheight = $max_height;
-			$thumbwidth = ($max_height / $height) * $width;
+			$thumbHeight = $max_height;
+			$thumbWidth = ($max_height / $height) * $width;
 		}
 		else
 		{
-			$thumbheight = $height;
-			$thumbwidth = $width;
+			$thumbHeight = $height;
+			$thumbWidth = $width;
 		}
 
-		return array(floor($thumbwidth), floor($thumbheight));
+		return array(floor($thumbWidth), floor($thumbHeight));
 	}
 
 	/**
 	 * Add the poll question, options, and vote count
 	 */
-	public function add_poll($name, $options, $allowed_view_votes)
+	public function add_poll($name, $options, $allowed_view_votes): void
 	{
 		global $txt;
 
@@ -928,7 +935,7 @@ class ElkPdf extends tFPDF
 	 * @param string $author
 	 * @param string $date
 	 */
-	public function message_header($subject, $author, $date)
+	public function message_header(string $subject, string $author, string $date): void
 	{
 		global $txt;
 
@@ -965,7 +972,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Items to print below the end of the message to provide separation
 	 */
-	public function end_message()
+	public function end_message(): void
 	{
 		$this->Ln(!empty($this->ila_height) ? $this->ila_height - $this->y : 10);
 		$this->ila_height = 0;
@@ -974,7 +981,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Print a page header, called automatically by fPDF
 	 */
-	public function Header()
+	public function Header(): void
 	{
 		global $context, $txt;
 
@@ -1021,7 +1028,7 @@ class ElkPdf extends tFPDF
 	 * @param int $g
 	 * @param int $b
 	 */
-	private function _elk_set_text_color($r, $g = 0, $b = 0)
+	private function _elk_set_text_color(int $r, int $g = 0, int $b = 0): void
 	{
 		static $_r = 0, $_g = 0, $_b = 0;
 
@@ -1047,7 +1054,7 @@ class ElkPdf extends tFPDF
 	 * @param string $tag
 	 * @param boolean $enable
 	 */
-	private function _set_style($tag, $enable)
+	private function _set_style(string $tag, bool $enable): void
 	{
 		// Keep track of the style depth / nesting
 		$this->{$tag} = $this->{$tag} ?? 0;
@@ -1072,7 +1079,7 @@ class ElkPdf extends tFPDF
 	 * @param int $px
 	 * @return float
 	 */
-	private function _px2mm($px)
+	private function _px2mm(int $px): float
 	{
 		return ($px * 25.4) / 96;
 	}
@@ -1083,7 +1090,7 @@ class ElkPdf extends tFPDF
 	 * @param int $mm
 	 * @return float
 	 */
-	private function _mm2px($mm)
+	private function _mm2px(int $mm): float
 	{
 		return ($mm * 96) / 25.4;
 	}
@@ -1091,7 +1098,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Draw a horizontal line
 	 */
-	private function _draw_line()
+	private function _draw_line(): void
 	{
 		$this->Line($this->lMargin, $this->y, ($this->w - $this->rMargin), $this->y);
 	}
@@ -1099,7 +1106,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Draw a filled rectangle
 	 */
-	private function _draw_rectangle()
+	private function _draw_rectangle(): void
 	{
 		$this->Rect($this->lMargin, $this->y, (int) ($this->w - $this->lMargin - $this->lMargin), 1, 'F');
 	}
@@ -1107,7 +1114,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Returns the available page width for printing
 	 */
-	private function _get_page_width()
+	private function _get_page_width(): void
 	{
 		$this->page_width = $this->w - $this->rMargin - $this->lMargin;
 	}
@@ -1115,7 +1122,7 @@ class ElkPdf extends tFPDF
 	/**
 	 * Returns the available page height for printing
 	 */
-	private function _get_page_height()
+	private function _get_page_height(): void
 	{
 		$this->page_height = $this->h - $this->bMargin - $this->tMargin;
 	}
@@ -1128,8 +1135,8 @@ class ElkPdf extends tFPDF
  */
 class VariableStream
 {
-	protected $position;
-	protected $varname;
+	protected int $position;
+	protected string $varname;
 
 	/**
 	 * Callback for fopen()
@@ -1138,7 +1145,7 @@ class VariableStream
 	 *
 	 * @return boolean
 	 */
-	public function stream_open($path)
+	public function stream_open(string $path): bool
 	{
 		$url = parse_url($path);
 		$this->varname = $url["host"];
@@ -1153,7 +1160,7 @@ class VariableStream
 	 * @param int $count
 	 * @return string
 	 */
-	public function stream_read($count)
+	public function stream_read(int $count): string
 	{
 		if (!isset($GLOBALS[$this->varname]))
 		{
@@ -1172,7 +1179,7 @@ class VariableStream
 	 * @param string $data
 	 * @return int
 	 */
-	public function stream_write($data)
+	public function stream_write(string $data): int
 	{
 		if (!isset($GLOBALS[$this->varname]))
 		{
@@ -1199,7 +1206,7 @@ class VariableStream
 	/**
 	 * Callback for feof()
 	 */
-	public function stream_eof()
+	public function stream_eof(): bool
 	{
 		return !isset($GLOBALS[$this->varname]) || $this->position >= strlen($GLOBALS[$this->varname]);
 	}
@@ -1212,7 +1219,7 @@ class VariableStream
 	 *
 	 * @return boolean
 	 */
-	public function stream_seek($offset, $whence)
+	public function stream_seek(int $offset, int $whence): bool
 	{
 		$result = true;
 
@@ -1260,7 +1267,7 @@ class VariableStream
 	 *
 	 * @return array
 	 */
-	public function stream_stat()
+	public function stream_stat(): array
 	{
 		return array();
 	}

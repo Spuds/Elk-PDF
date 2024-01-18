@@ -6,7 +6,7 @@
  * @copyright (c) 2011-2022 Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.1.0
+ * @version 1.2.0
  *
  */
 
@@ -136,10 +136,12 @@ class PDF_Controller extends Action_Controller
 			stream_wrapper_register("elkimg", "VariableStream");
 
 			// Common page setup
+			$margin = 28.35 / (72 / 25.4); // based on unit mm in the above instance
 			$pdf->SetAuthor(un_htmlspecialchars($mbname), true);
 			$pdf->SetTitle(un_htmlspecialchars($mbname) . '_' . $context['board_name'], true);
 			$pdf->SetSubject($context['topic_subject'], true);
 			$pdf->SetMargins($modSettings['pdf_wmargin'], $modSettings['pdf_hmargin']);
+			$pdf->SetAutoPageBreak(true,$margin); // 1 cm
 			$pdf->SetLineWidth(.1);
 
 			// Fonts we will or may use
