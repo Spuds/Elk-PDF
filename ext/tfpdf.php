@@ -1,18 +1,17 @@
 <?php
 /*******************************************************************************
- * tFPDF (based on FPDF 1.84)                                                  *
- *                                                                             *
- * Version:  1.32                                                              *
- * Date:     2020-08-29                                                        *
- * Authors:  Ian Back <ianb@bpm1.com>                                          *
- *           Tycho Veltmeijer <tfpdf@tychoveltmeijer.nl> (versions 1.30+)      *
- * License:  LGPL                                                              *
+ * tFPDF (based on FPDF 1.85)                                                   *
+ *                                                                              *
+ * Version:  1.33                                                               *
+ * Date:     2022-12-20                                                         *
+ * Authors:  Ian Back <ianb@bpm1.com>                                           *
+ *           Tycho Veltmeijer <tfpdf@tychoveltmeijer.nl> (versions 1.30+)       *
+ * License:  LGPL                                                               *
  *******************************************************************************/
-
-define('tFPDF_VERSION','1.32');
 
 class tFPDF
 {
+	public const VERSION = '1.33';
 	protected $unifontSubset;
 	protected $page;               // current page number
 	protected $n;                  // current object number
@@ -68,13 +67,13 @@ class tFPDF
 	protected $ZoomMode;           // zoom display mode
 	protected $LayoutMode;         // layout display mode
 	protected $metadata;           // document properties
+	protected $CreationDate;       // document creation date
 	protected $PDFVersion;         // PDF version number
 
 	/*******************************************************************************
-	 *                                                                              *
 	 *                               Public methods                                 *
-	 *                                                                              *
 	 *******************************************************************************/
+
 	public function __construct($orientation='P', $unit='mm', $size='A4')
 	{
 		// Some checks
@@ -131,7 +130,7 @@ class tFPDF
 			$this->Error('Incorrect unit: '.$unit);
 		// Page sizes
 		$this->StdPageSizes = array('a3'=>array(841.89,1190.55), 'a4'=>array(595.28,841.89), 'a5'=>array(420.94,595.28),
-									'letter'=>array(612,792), 'legal'=>array(612,1008));
+			'letter'=>array(612,792), 'legal'=>array(612,1008));
 		$size = $this->_getpagesize($size);
 		$this->DefPageSize = $size;
 		$this->CurPageSize = $size;
@@ -169,6 +168,8 @@ class tFPDF
 		$this->SetDisplayMode('default');
 		// Enable compression
 		$this->SetCompression(true);
+		// Metadata
+		$this->metadata = array('Producer'=>'tFPDF '.self::VERSION);
 		// Set default PDF version number
 		$this->PDFVersion = '1.3';
 	}
@@ -236,31 +237,31 @@ class tFPDF
 	public function SetTitle($title, $isUTF8=false)
 	{
 		// Title of document
-		$this->metadata['Title'] = $isUTF8 ? $title : utf8_encode($title);
+		$this->metadata['Title'] = $isUTF8 ? $title : $this->_UTF8encode($title);
 	}
 
 	public function SetAuthor($author, $isUTF8=false)
 	{
 		// Author of document
-		$this->metadata['Author'] = $isUTF8 ? $author : utf8_encode($author);
+		$this->metadata['Author'] = $isUTF8 ? $author : $this->_UTF8encode($author);
 	}
 
 	public function SetSubject($subject, $isUTF8=false)
 	{
 		// Subject of document
-		$this->metadata['Subject'] = $isUTF8 ? $subject : utf8_encode($subject);
+		$this->metadata['Subject'] = $isUTF8 ? $subject : $this->_UTF8encode($subject);
 	}
 
 	public function SetKeywords($keywords, $isUTF8=false)
 	{
 		// Keywords of document
-		$this->metadata['Keywords'] = $isUTF8 ? $keywords : utf8_encode($keywords);
+		$this->metadata['Keywords'] = $isUTF8 ? $keywords : $this->_UTF8encode($keywords);
 	}
 
 	public function SetCreator($creator, $isUTF8=false)
 	{
 		// Creator of document
-		$this->metadata['Creator'] = $isUTF8 ? $creator : utf8_encode($creator);
+		$this->metadata['Creator'] = $isUTF8 ? $creator : $this->_UTF8encode($creator);
 	}
 
 	public function AliasNbPages($alias='{nb}')
@@ -272,7 +273,7 @@ class tFPDF
 	public function Error($msg)
 	{
 		// Fatal error
-		throw new Exception('FPDF error: '.$msg);
+		throw new Exception('tFPDF error: '.$msg);
 	}
 
 	public function Close()
@@ -297,7 +298,6 @@ class tFPDF
 		// Start a new page
 		if($this->state==3)
 			$this->Error('The document is closed');
-
 		$family = $this->FontFamily;
 		$style = $this->FontStyle.($this->underline ? 'U' : '');
 		$fontsize = $this->FontSizePt;
@@ -415,7 +415,7 @@ class tFPDF
 	{
 		// Get width of a string in the current font
 		$s = (string)$s;
-		$cw = &$this->CurrentFont['cw'];
+		$cw = $this->CurrentFont['cw'];
 		$w=0;
 		if ($this->unifontSubset) {
 			$unicode = $this->UTF8StringToArray($s);
@@ -467,7 +467,7 @@ class tFPDF
 		$family = strtolower($family);
 		$style = strtoupper($style);
 		if($style=='IB')
-			$style='BI';
+			$style = 'BI';
 		if($file=='') {
 			if ($uni) {
 				$file = str_replace(' ','',$family).strtolower($style).'.ttf';
@@ -479,7 +479,6 @@ class tFPDF
 		$fontkey = $family.$style;
 		if(isset($this->fonts[$fontkey]))
 			return;
-
 		if ($uni) {
 			if (defined("_SYSTEM_TTFONTS") && file_exists(_SYSTEM_TTFONTS.$file )) { $ttffilename = _SYSTEM_TTFONTS.$file ; }
 			else { $ttffilename = $this->fontpath.'unifont/'.$file ; }
@@ -499,13 +498,13 @@ class tFPDF
 				$name = preg_replace('/[ ()]/','',$ttf->fullName);
 
 				$desc= array('Ascent'=>round($ttf->ascent),
-							 'Descent'=>round($ttf->descent),
-							 'CapHeight'=>round($ttf->capHeight),
-							 'Flags'=>$ttf->flags,
-							 'FontBBox'=>'['.round($ttf->bbox[0])." ".round($ttf->bbox[1])." ".round($ttf->bbox[2])." ".round($ttf->bbox[3]).']',
-							 'ItalicAngle'=>$ttf->italicAngle,
-							 'StemV'=>round($ttf->stemV),
-							 'MissingWidth'=>round($ttf->defaultWidth));
+					'Descent'=>round($ttf->descent),
+					'CapHeight'=>round($ttf->capHeight),
+					'Flags'=>$ttf->flags,
+					'FontBBox'=>'['.round($ttf->bbox[0])." ".round($ttf->bbox[1])." ".round($ttf->bbox[2])." ".round($ttf->bbox[3]).']',
+					'ItalicAngle'=>$ttf->italicAngle,
+					'StemV'=>round($ttf->stemV),
+					'MissingWidth'=>round($ttf->defaultWidth));
 				$up = round($ttf->underlinePosition);
 				$ut = round($ttf->underlineThickness);
 				$originalsize = $ttfstat['size']+0;
@@ -583,6 +582,7 @@ class tFPDF
 		// Test if font is already selected
 		if($this->FontFamily==$family && $this->FontStyle==$style && $this->FontSizePt==$size)
 			return;
+
 		// Test if font is already loaded
 		$fontkey = $family.$style;
 		if(!isset($this->fonts[$fontkey]))
@@ -735,7 +735,6 @@ class tFPDF
 				$dx = $this->cMargin;
 			if($this->ColorFlag)
 				$s .= 'q '.$this->TextColor.' ';
-
 			// If multibyte, Tw has no effect - do word spacing using an adjustment before each space
 			if ($this->ws && $this->unifontSubset) {
 				foreach($this->UTF8StringToArray($txt) as $uni)
@@ -793,7 +792,7 @@ class tFPDF
 		// Output text with automatic or explicit line breaks
 		if(!isset($this->CurrentFont))
 			$this->Error('No font has been set');
-		$cw = &$this->CurrentFont['cw'];
+		$cw = $this->CurrentFont['cw'];
 		if($w==0)
 			$w = $this->w-$this->rMargin-$this->x;
 		$wmax = ($w-2*$this->cMargin);
@@ -943,9 +942,8 @@ class tFPDF
 		// Output text in flowing mode
 		if(!isset($this->CurrentFont))
 			$this->Error('No font has been set');
-		$cw = &$this->CurrentFont['cw'];
+		$cw = $this->CurrentFont['cw'];
 		$w = $this->w-$this->rMargin-$this->x;
-
 		$wmax = ($w-2*$this->cMargin);
 		$s = str_replace("\r",'',(string)$txt);
 		if ($this->unifontSubset) {
@@ -1219,7 +1217,7 @@ class tFPDF
 			case 'D':
 				// Download file
 				$this->_checkoutput();
-				header('Content-Type: application/x-download');
+				header('Content-Type: application/pdf');
 				header('Content-Disposition: attachment; '.$this->_httpencode('filename',$name,$isUTF8));
 				header('Cache-Control: private, max-age=0, must-revalidate');
 				header('Pragma: public');
@@ -1240,18 +1238,14 @@ class tFPDF
 	}
 
 	/*******************************************************************************
-	 *                                                                              *
 	 *                              Protected methods                               *
-	 *                                                                              *
 	 *******************************************************************************/
+
 	protected function _dochecks()
 	{
 		// Check availability of mbstring
 		if(!function_exists('mb_strlen'))
 			$this->Error('mbstring extension is not available');
-		// Check mbstring overloading
-		if(ini_get('mbstring.func_overload') & 2)
-			$this->Error('mbstring overloading must be disabled');
 	}
 
 	protected function _checkoutput()
@@ -1297,7 +1291,7 @@ class tFPDF
 	{
 		$this->page++;
 		$this->pages[$this->page] = '';
-	$this->PageLinks[$this->page] = array();
+		$this->PageLinks[$this->page] = array();
 		$this->state = 2;
 		$this->x = $this->lMargin;
 		$this->y = $this->tMargin;
@@ -1336,9 +1330,9 @@ class tFPDF
 		{
 			if($rotation%90!=0)
 				$this->Error('Incorrect rotation value: '.$rotation);
-			$this->CurRotation = $rotation;
 			$this->PageInfo[$this->page]['rotation'] = $rotation;
 		}
+		$this->CurRotation = $rotation;
 	}
 
 	protected function _endpage()
@@ -1379,50 +1373,24 @@ class tFPDF
 		if($this->_isascii($value))
 			return $param.'="'.$value.'"';
 		if(!$isUTF8)
-			$value = utf8_encode($value);
-		if(strpos($_SERVER['HTTP_USER_AGENT'],'MSIE')!==false)
-			return $param.'="'.rawurlencode($value).'"';
-		else
-			return $param."*=UTF-8''".rawurlencode($value);
+			$value = $this->_UTF8encode($value);
+		return $param."*=UTF-8''".rawurlencode($value);
+	}
+
+	protected function _UTF8encode($s)
+	{
+		// Convert ISO-8859-1 to UTF-8
+		return mb_convert_encoding($s,'UTF-8','ISO-8859-1');
 	}
 
 	protected function _UTF8toUTF16($s)
 	{
 		// Convert UTF-8 to UTF-16BE with BOM
-		$res = "\xFE\xFF";
-		$nb = strlen($s);
-		$i = 0;
-		while($i<$nb)
-		{
-			$c1 = ord($s[$i++]);
-			if($c1>=224)
-			{
-				// 3-byte character
-				$c2 = ord($s[$i++]);
-				$c3 = ord($s[$i++]);
-				$res .= chr((($c1 & 0x0F)<<4) + (($c2 & 0x3C)>>2));
-				$res .= chr((($c2 & 0x03)<<6) + ($c3 & 0x3F));
-			}
-			elseif($c1>=192)
-			{
-				// 2-byte character
-				$c2 = ord($s[$i++]);
-				$res .= chr(($c1 & 0x1C)>>2);
-				$res .= chr((($c1 & 0x03)<<6) + ($c2 & 0x3F));
-			}
-			else
-			{
-				// Single-byte character
-				$res .= "\0".chr($c1);
-			}
-		}
-		return $res;
+		return "\xFE\xFF".mb_convert_encoding($s,'UTF-16BE','UTF-8');
 	}
 
 	protected function _escape($s)
 	{
-		if($s === null)
-			return $s;
 		// Escape special characters
 		if(strpos($s,'(')!==false || strpos($s,')')!==false || strpos($s,'\\')!==false || strpos($s,"\r")!==false)
 			return str_replace(array('\\','(',')',"\r"), array('\\\\','\\(','\\)','\\r'), $s);
@@ -1649,7 +1617,6 @@ class tFPDF
 		rewind($f);
 		$info = $this->_parsepngstream($f,$file);
 		fclose($f);
-
 		return $info;
 	}
 
@@ -1708,6 +1675,29 @@ class tFPDF
 		$this->_put('endobj');
 	}
 
+	protected function _putlinks($n)
+	{
+		foreach($this->PageLinks[$n] as $pl)
+		{
+			$this->_newobj();
+			$rect = sprintf('%.2F %.2F %.2F %.2F',$pl[0],$pl[1],$pl[0]+$pl[2],$pl[1]-$pl[3]);
+			$s = '<</Type /Annot /Subtype /Link /Rect ['.$rect.'] /Border [0 0 0] ';
+			if(is_string($pl[4]))
+				$s .= '/A <</S /URI /URI '.$this->_textstring($pl[4]).'>>>>';
+			else
+			{
+				$l = $this->links[$pl[4]];
+				if(isset($this->PageInfo[$l[0]]['size']))
+					$h = $this->PageInfo[$l[0]]['size'][1];
+				else
+					$h = ($this->DefOrientation=='P') ? $this->DefPageSize[1]*$this->k : $this->DefPageSize[0]*$this->k;
+				$s .= sprintf('/Dest [%d 0 R /XYZ 0 %.2F null]>>',$this->PageInfo[$l[0]]['n'],$h-$l[1]*$this->k);
+			}
+			$this->_put($s);
+			$this->_put('endobj');
+		}
+	}
+
 	protected function _putpage($n)
 	{
 		$this->_newobj();
@@ -1736,31 +1726,11 @@ class tFPDF
 			$r = $this->UTF8ToUTF16BE($this->page, false);
 			$this->pages[$n] = str_replace($alias,$r,$this->pages[$n]);
 			// Now repeat for no pages in non-subset fonts
-
 			$this->pages[$n] = str_replace($this->AliasNbPages,$this->page,$this->pages[$n]);
 		}
-
 		$this->_putstreamobject($this->pages[$n]);
-		// Annotations
-		foreach($this->PageLinks[$n] as $pl)
-		{
-			$this->_newobj();
-				$rect = sprintf('%.2F %.2F %.2F %.2F',$pl[0],$pl[1],$pl[0]+$pl[2],$pl[1]-$pl[3]);
-			$s = '<</Type /Annot /Subtype /Link /Rect ['.$rect.'] /Border [0 0 0] ';
-			if(is_string($pl[4]))
-				$s .= '/A <</S /URI /URI '.$this->_textstring($pl[4]).'>>>>';
-			else
-			{
-				$l = $this->links[$pl[4]];
-				if(isset($this->PageInfo[$l[0]]['size']))
-					$h = $this->PageInfo[$l[0]]['size'][1];
-				else
-					$h = ($this->DefOrientation=='P') ? $this->DefPageSize[1]*$this->k : $this->DefPageSize[0]*$this->k;
-				$s .= sprintf('/Dest [%d 0 R /XYZ 0 %.2F null]>>',$this->PageInfo[$l[0]]['n'],$h-$l[1]*$this->k);
-			}
-			$this->_put($s);
-			$this->_put('endobj');
-		}
+		// Link annotations
+		$this->_putlinks($n);
 	}
 
 	protected function _putpages()
@@ -1859,7 +1829,7 @@ class tFPDF
 			if($type=='Core')
 			{
 				// Core font
-				$this->fonts[$k]['n']=$this->n+1;
+				$this->fonts[$k]['n'] = $this->n+1;
 				$this->_newobj();
 				$this->_put('<</Type /Font');
 				$this->_put('/BaseFont /'.$name);
@@ -1876,7 +1846,7 @@ class tFPDF
 				// Additional Type1 or TrueType/OpenType font
 				if(isset($font['subsetted']) && $font['subsetted'])
 					$name = 'AAAAAA+'.$name;
-				$this->fonts[$k]['n']=$this->n+1;
+				$this->fonts[$k]['n'] = $this->n+1;
 				$this->_newobj();
 				$this->_put('<</Type /Font');
 				$this->_put('/BaseFont /'.$name);
@@ -1884,6 +1854,7 @@ class tFPDF
 				$this->_put('/FirstChar 32 /LastChar 255');
 				$this->_put('/Widths '.($this->n+1).' 0 R');
 				$this->_put('/FontDescriptor '.($this->n+2).' 0 R');
+
 				if($font['enc'])
 				{
 					if(isset($font['diff']))
@@ -1891,23 +1862,25 @@ class tFPDF
 					else
 						$this->_put('/Encoding /WinAnsiEncoding');
 				}
+
 				if(isset($font['uv']))
 					$this->_put('/ToUnicode '.$this->cmaps[$cmapkey].' 0 R');
 				$this->_put('>>');
 				$this->_put('endobj');
 				// Widths
 				$this->_newobj();
-				$cw=&$font['cw'];
-				$s='[';
+				$cw = $font['cw'];
+				$s = '[';
 				for($i=32;$i<=255;$i++)
-					$s.=$cw[chr($i)].' ';
+					$s .= $cw[chr($i)].' ';
 				$this->_put($s.']');
 				$this->_put('endobj');
 				// Descriptor
 				$this->_newobj();
-				$s='<</Type /FontDescriptor /FontName /'.$name;
+				$s = '<</Type /FontDescriptor /FontName /'.$name;
 				foreach($font['desc'] as $k=>$v)
 					$s .= ' /'.$k.' '.$v;
+
 				if(!empty($font['file']))
 					$s .= ' /FontFile'.($type=='Type1' ? '' : '2').' '.$this->FontFiles[$font['file']]['n'].' 0 R';
 				$this->_put($s.'>>');
@@ -2033,7 +2006,7 @@ class tFPDF
 			{
 				// Allow for additional types
 				$this->fonts[$k]['n'] = $this->n+1;
-				$mtd='_put'.strtolower($type);
+				$mtd = '_put'.strtolower($type);
 				if(!method_exists($this,$mtd))
 					$this->Error('Unsupported font type: '.$type);
 				$this->$mtd($font);
@@ -2041,7 +2014,7 @@ class tFPDF
 		}
 	}
 
-	protected function _putTTfontwidths(&$font, $maxUni) {
+	protected function _putTTfontwidths($font, $maxUni) {
 		if (file_exists($font['unifilename'].'.cw127.php')) {
 			include($font['unifilename'].'.cw127.php') ;
 			$startcid = 128;
@@ -2075,6 +2048,7 @@ class tFPDF
 			}
 			if ((!isset($font['cw'][$cid*2]) || !isset($font['cw'][$cid*2+1])) ||
 				($font['cw'][$cid*2] == "\00" && $font['cw'][$cid*2+1] == "\00")) { continue; }
+
 			$width = (ord($font['cw'][$cid*2]) << 8) + ord($font['cw'][$cid*2+1]);
 			if ($width == 65535) { $width = 0; }
 			if ($cid > 255 && (!isset($font['subset'][$cid]) || !$font['subset'][$cid])) { continue; }
@@ -2280,8 +2254,8 @@ class tFPDF
 
 	protected function _putinfo()
 	{
-		$this->metadata['Producer'] = 'tFPDF '.tFPDF_VERSION;
-		$this->metadata['CreationDate'] = 'D:'.@date('YmdHis');
+		$date = @date('YmdHisO',$this->CreationDate);
+		$this->metadata['CreationDate'] = 'D:'.substr($date,0,-2)."'".substr($date,-2)."'";
 		foreach($this->metadata as $key=>$value)
 			$this->_put('/'.$key.' '.$this->_textstring($value));
 	}
@@ -2321,6 +2295,7 @@ class tFPDF
 
 	protected function _enddoc()
 	{
+		$this->CreationDate = time();
 		$this->_putheader();
 		$this->_putpages();
 		$this->_putresources();
