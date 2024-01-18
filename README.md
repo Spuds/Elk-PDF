@@ -8,6 +8,7 @@ This addon replaces the print button action to instead create a PDF of the topic
 
 ## Dependencies
 Utilizes tFPDF (based on FPDF) by Ian Back, License: LGPL
+Requires PHP DomDocument
 
 ## Features
   - One-click creation of topic PDF's
