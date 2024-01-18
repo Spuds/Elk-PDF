@@ -48,7 +48,7 @@ class ElkPdf extends tFPDF
 	private array $dontShowBelow = [];
 	/** current line height position, used to force linebreak on next image */
 	private int $ila_height = 0;
-    /** Tracks usage of ila style images so we clear after the last one */
+	/** Tracks usage of ila style images so we clear after the last one */
 	private int $ila_image_count = -1;
 
 	/**
@@ -66,46 +66,61 @@ class ElkPdf extends tFPDF
 		$this->SetFont($this->font_face, '', 10);
 
 		// Split up all the tags
-		$a = preg_split('~<(.*?)>~', $this->html, -1, PREG_SPLIT_DELIM_CAPTURE);
+		$tags = preg_split('~<(.*?)>~', $this->html, -1, PREG_SPLIT_DELIM_CAPTURE);
 
-		foreach ($a as $i => $e)
+		foreach ($tags as $i => $tag)
 		{
-			// Between the tags, is text
-			if ($i % 2 === 0)
-			{
-				// Text or link text?
-				if ($this->_href)
-				{
-					$this->_add_link($this->_href, $e);
-				}
-				elseif (!empty($e))
-				{
-					$this->Write($this->line_height, $e);
-				}
-			}
-			// HTML Tag
-			elseif ($e[0] === '/')
-			{
-				$this->_close_tag(trim(substr($e, 1)));
-			}
-			else
-			{
-				// Opening Tag
-				$a2 = explode(' ', $e);
-				$tag = array_shift($a2);
+			$this->processTag($i, $tag);
+		}
+	}
 
-				// Extract any attributes
-				$attr = array();
-				foreach ($a2 as $value)
-				{
-					if (preg_match('~([^=]*)=["\']?([^"\']*)~', $value, $a3))
-					{
-						$attr[strtolower($a3[1])] = $a3[2];
-					}
-				}
+	/**
+	 * Processes a tag within the given index and tag
+	 *
+	 * @param int $i The index of the tag
+	 * @param string $tag The tag to process
+	 *
+	 * @return void
+	 */
+	private function processTag(int $i, string $tag) : void
+	{
+		// Between the tags, is text
+		if ($i % 2 === 0)
+		{
+			$tag = trim($tag);
 
-				$this->_open_tag($tag, $attr);
+			// Text or link text?
+			if ($this->_href)
+			{
+				$this->_add_link($this->_href, $tag);
 			}
+			elseif (!empty($tag))
+			{
+				$this->Write($this->line_height, $tag);
+			}
+		}
+		// HTML Tag
+		elseif ($tag[0] === '/')
+		{
+			$this->_close_tag(trim(substr($tag, 1)));
+		}
+		else
+		{
+			// Opening Tag
+			$tagItems = explode(' ', $tag);
+			$tag = array_shift($tagItems);
+
+			// Extract any attributes
+			$attr = array();
+			foreach ($tagItems as $value)
+			{
+				if (preg_match('~([^=]*)=["\']?([^"\']*)~', $value, $tagAttr))
+				{
+					$attr[strtolower($tagAttr[1])] = $tagAttr[2];
+				}
+			}
+
+			$this->_open_tag($tag, $attr);
 		}
 	}
 
@@ -202,6 +217,8 @@ class ElkPdf extends tFPDF
 				$this->_elk_set_text_color(-1);
 				break;
 			case 'br':
+				$this->Ln($this->line_height);
+				break;
 			case 'p':
 				if (!$this->_first_node)
 				{
@@ -225,7 +242,6 @@ class ElkPdf extends tFPDF
 						$this->Ln($this->ila_height - $this->y);
 						$this->ila_image_count = -1;
 						$this->ila_height = 0;
-
 					}
 					else
 					{

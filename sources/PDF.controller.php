@@ -15,6 +15,12 @@
  */
 class PDF_Controller extends Action_Controller
 {
+	public string $pdf_page = 'letter';
+	public string $pdf_unit = 'mm';
+	public string $pdf_orientation = 'P';
+	public int $pdf_wmargin = 15;
+	public int $pdf_hmargin = 15;
+
 	/**
 	 * Entry point for this class (by default).
 	 *
@@ -108,17 +114,9 @@ class PDF_Controller extends Action_Controller
 	/**
 	 * Create the PDF from the topic information
 	 */
-	private function _create_pdf()
+	private function _create_pdf(): void
 	{
-		global $modSettings, $mbname, $context;
-
-		if (empty($modSettings['pdf_page']))
-		{
-			$modSettings['pdf_page'] = 'letter';
-		}
-
-		$modSettings['pdf_wmargin'] = 15;
-		$modSettings['pdf_hmargin'] = 15;
+		global $mbname, $context;
 
 		// Extra memory is always good with PDF creation
 		detectServer()->setMemoryLimit('128M');
@@ -129,110 +127,149 @@ class PDF_Controller extends Action_Controller
 
 		try
 		{
-			// Portrait, millimeter, page size (Letter, A4, etc)
-			$pdf = new ElkPdf('P', 'mm', $modSettings['pdf_page']);
-
-			// Stream handle for external images
-			stream_wrapper_register("elkimg", "VariableStream");
-
-			// Common page setup
-			$margin = 28.35 / (72 / 25.4); // based on unit mm in the above instance
-			$pdf->SetAuthor(un_htmlspecialchars($mbname), true);
-			$pdf->SetTitle(un_htmlspecialchars($mbname) . '_' . $context['board_name'], true);
-			$pdf->SetSubject($context['topic_subject'], true);
-			$pdf->SetMargins($modSettings['pdf_wmargin'], $modSettings['pdf_hmargin']);
-			$pdf->SetAutoPageBreak(true,$margin); // 1 cm
-			$pdf->SetLineWidth(.1);
-
-			// Fonts we will or may use
-			$pdf->AddFont('DejaVu', '', 'DejaVuSerifCondensed.ttf', true);
-			$pdf->AddFont('DejaVu', 'B', 'DejaVuSerifCondensed-Bold.ttf', true);
-			$pdf->AddFont('DejaVu', 'I', 'DejaVuSerifCondensed-Italic.ttf', true);
-			$pdf->AddFont('DejaVu', 'BI', 'DejaVuSerifCondensed-BoldItalic.ttf', true);
-			$pdf->AddFont('OpenSans', '', 'OpenSans-Regular.ttf', true);
-			$pdf->AddFont('OpenSans', 'B', 'OpenSans-Bold.ttf', true);
-			$pdf->AddFont('OpenSans', 'I', 'OpenSans-Italic.ttf', true);
-			$pdf->AddFont('OpenSans', 'BI', 'OpenSans-BoldItalic.ttf', true);
-
-			// Start the first page and auto page counter
-			$pdf->AliasNbPages('{elk_nb}');
-			$pdf->begin_page();
+			$pdf = $this->initializePdf();
 
 			// On to the posts for this topic
 			$count = 0;
 			foreach ($context['posts'] as $post)
 			{
-				// Write message header
-				$pdf->message_header(html_entity_decode($post['subject']), html_entity_decode($post['member']), $post['time']);
-
-				// Handle polls.
-				if (!empty($context['poll']) && empty($count))
-				{
-					$pdf->add_poll(html_entity_decode($context['poll']['question']), $context['poll']['options'], $context['allow_poll_view']);
-				}
-
-				// Load any attachment images
-				if (!empty($context['printattach'][$post['id_msg']]))
-				{
-					$pdf->set_attachments($context['printattach'][$post['id_msg']]);
-				}
-
-				// Write message body.
-				$pdf->write_html(preg_replace_callback('~(&#(\d{1,7}|x[0-9a-fA-F]{1,6});)~', 'fixchar__callback', $post['body']));
-
-				// Show below post attachment images
-				if (!empty($context['printattach'][$post['id_msg']]))
-				{
-					$pdf->add_attachments();
-				}
-
-				$pdf->end_message();
+				$this->processPost($pdf, $post, $context, $count);
 				$count++;
 			}
 
-			// Make sure we can send
-			if (!headers_sent($filename, $linenum))
-			{
-				// Clear anything in the buffers
-				while (@ob_get_level() > 0)
-				{
-					@ob_end_clean();
-				}
+			$this->outputPdfContent($pdf, $mbname, $context['topic_subject']);
 
-				$outputname = $this->filter_filename(un_htmlspecialchars($mbname) . '_' . html_entity_decode($context['topic_subject'])) . '.pdf';
-
-				// Get the PDF output
-				$out = $pdf->Output($outputname, 'S', true);
-
-				ob_start();
-				header('Content-Encoding: none');
-
-				// Output content to browser
-				header('Content-Type: application/pdf');
-
-				if ($_SERVER['SERVER_PORT'] === '443' && (strpos($_SERVER['HTTP_USER_AGENT'], 'MSIE') !== false))
-				{
-					header('Cache-Control: must-revalidate, post-check=0, pre-check=0', true);
-					header('Pragma: public', true);
-				}
-
-				header('Content-Length: ' . strlen($out));
-				header('Content-disposition: inline; filename=' . $outputname);
-
-				echo $out;
-
-				// Just exit now
-				obExit(false);
-			}
-			else
-			{
-				echo "Headers already sent in $filename on line $linenum";
-			}
 		}
 		catch (Exception $e)
 		{
 			throw new Elk_Exception($e->getMessage());
 		}
+	}
+
+	/**
+	 * Initialize a PDF object with the necessary settings and fonts.
+	 *
+	 * @return ElkPdf The initialized ElkPdf object.
+	 */
+	private function initializePdf(): ElkPdf
+	{
+		// Portrait, millimeter, page size (Letter, A4, etc)
+		$pdf = new ElkPdf($this->pdf_orientation, $this->pdf_unit, $this->pdf_page);
+
+		// Stream handle for external images
+		stream_wrapper_register("elkimg", "VariableStream");
+
+		// Common page setup
+		$margin = 28.35 / (72 / 25.4); // based on unit mm in the above instance
+		$pdf->SetAuthor(un_htmlspecialchars($mbname), true);
+		$pdf->SetTitle(un_htmlspecialchars($mbname) . '_' . $context['board_name'], true);
+		$pdf->SetSubject($context['topic_subject'], true);
+		$pdf->SetMargins($this->pdf_wmargin, $this->pdf_hmargin);
+		$pdf->SetAutoPageBreak(true,$margin); // 1 cm
+		$pdf->SetLineWidth(.1);
+
+		// Fonts we will or may use
+		$pdf->AddFont('DejaVu', '', 'DejaVuSerifCondensed.ttf', true);
+		$pdf->AddFont('DejaVu', 'B', 'DejaVuSerifCondensed-Bold.ttf', true);
+		$pdf->AddFont('DejaVu', 'I', 'DejaVuSerifCondensed-Italic.ttf', true);
+		$pdf->AddFont('DejaVu', 'BI', 'DejaVuSerifCondensed-BoldItalic.ttf', true);
+		$pdf->AddFont('OpenSans', '', 'OpenSans-Regular.ttf', true);
+		$pdf->AddFont('OpenSans', 'B', 'OpenSans-Bold.ttf', true);
+		$pdf->AddFont('OpenSans', 'I', 'OpenSans-Italic.ttf', true);
+		$pdf->AddFont('OpenSans', 'BI', 'OpenSans-BoldItalic.ttf', true);
+
+		// Start the first page and auto page counter
+		$pdf->AliasNbPages('{elk_nb}');
+		$pdf->begin_page();
+
+		return $pdf;
+	}
+
+	/**
+	 * Process a topic post and create the necessary PDF content.
+	 *
+	 * @param ElkPdf $pdf The PDF generator object.
+	 * @param array $post The post data.
+	 * @param array $context The context data.
+	 * @param int $count The count data.
+	 * @return void
+	 */
+	private function processPost(ElkPdf $pdf, $post, $context, $count): void
+	{
+		// Write message header
+		$pdf->message_header(html_entity_decode($post['subject']), html_entity_decode($post['member']), $post['time']);
+
+		// Handle polls.
+		if (!empty($context['poll']) && empty($count))
+		{
+			$pdf->add_poll(html_entity_decode($context['poll']['question']), $context['poll']['options'], $context['allow_poll_view']);
+		}
+
+		// Load images
+		if (!empty($context['printattach'][$post['id_msg']]))
+		{
+			$pdf->set_attachments($context['printattach'][$post['id_msg']]);
+		}
+
+		// Write message body.
+		$pdf->write_html(preg_replace_callback('~(&#(\d{1,7}|x[0-9a-fA-F]{1,6});)~', 'fixchar__callback', $post['body']));
+
+		// Show below post attachment images
+		if (!empty($context['printattach'][$post['id_msg']]))
+		{
+			$pdf->add_attachments();
+		}
+
+		$pdf->end_message();
+	}
+
+	/**
+	 * Output the PDF content to the browser.
+	 *
+	 * @param ElkPdf $pdf The PDF generator object.
+	 * @param string $mbname The name of the message board.
+	 * @param string $topicSubject The subject of the topic.
+	 * @return void
+	 * @throws \RuntimeException If headers have already been sent.
+	 */
+	private function outputPdfContent(ElkPdf $pdf, $mbname, $topicSubject): void
+	{
+		// Make sure we can send
+		if (headers_sent($filename, $linenum))
+		{
+			throw new \RuntimeException("Headers already sent in $filename on line $linenum");
+		}
+
+		// Clear anything in the buffers
+		while (@ob_get_level() > 0)
+		{
+			@ob_end_clean();
+		}
+
+		$outputName = $this->filter_filename(un_htmlspecialchars($mbname) . '_' . html_entity_decode($topicSubject)) . '.pdf';
+
+		// Get the PDF output
+		$out = $pdf->Output($outputName, 'S', true);
+
+		ob_start();
+
+		// Output content to browser
+		header('Content-Encoding: none');
+		header('Content-Type: application/pdf');
+
+		if ($_SERVER['SERVER_PORT'] === '443' && (strpos($_SERVER['HTTP_USER_AGENT'], 'MSIE') !== false))
+		{
+			header('Cache-Control: must-revalidate, post-check=0, pre-check=0', true);
+			header('Pragma: public', true);
+		}
+
+		header('Content-Length: ' . strlen($out));
+		header('Content-disposition: inline; filename=' . $outputName);
+
+		echo $out;
+
+		// Just exit now
+		obExit(false);
 	}
 
 	/**
@@ -265,7 +302,7 @@ class PDF_Controller extends Action_Controller
 	}
 
 	/**
-	 * Make a name normal looking after illegal characters have been replaced
+	 * Make a filename normal looking after illegal characters have been replaced
 	 *
 	 * @param $filename
 	 * @return string
