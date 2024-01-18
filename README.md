@@ -7,7 +7,7 @@ This Elkarte addon is released under a [BSD-3-Clause](https://opensource.org/lic
 This addon replaces the print button action to instead create a PDF of the topic for viewing / saving.
 
 ## Dependencies
-Utilizes tFPDF (based on FPDF) by Ian Back, License:  LGPL
+Utilizes tFPDF (based on FPDF) by Ian Back, License: LGPL
 
 ## Features
   - One-click creation of topic PDF's
