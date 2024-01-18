@@ -147,7 +147,7 @@ class ElkPdf extends tFPDF
 		$this->doc = new \DOMDocument();
 
 		// Load the HTML into the instance
-		$this->doc->loadHTML(mb_convert_encoding($this->html, 'HTML-ENTITIES', 'UTF-8'));
+		$this->doc->loadHTML(htmlspecialchars_decode(htmlentities($this->html)));
 
 		// ILA's will be shown in the post text, but only left aligned
 		$this->_prepare_ila();
