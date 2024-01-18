@@ -50,6 +50,10 @@ class ElkPdf extends tFPDF
 	private int $ila_height = 0;
 	/** Tracks usage of ila style images so we clear after the last one */
 	private int $ila_image_count = -1;
+	/** Tracks nesting of U, B, I style tags {$tag} Dynamic creation */
+	private int $u = 0;
+	private int $i = 0;
+	private int $b = 0;
 
 	/**
 	 * Converts a block of HTML to appropriate fPDF commands
@@ -879,7 +883,7 @@ class ElkPdf extends tFPDF
 		$width = (int) $this->_px2mm($width);
 		$height = (int) $this->_px2mm($height);
 		$across = 2;
-		$down = 2;
+		$down = 3;
 
 		// Max width and height
 		$max_width = floor($this->page_width / $across - ($across - 1) * 2);
@@ -1132,7 +1136,7 @@ class ElkPdf extends tFPDF
 	 */
 	private function _get_page_width(): void
 	{
-		$this->page_width = $this->w - $this->rMargin - $this->lMargin;
+		$this->page_width = (int) round($this->w - $this->rMargin - $this->lMargin, 0);
 	}
 
 	/**
@@ -1140,7 +1144,7 @@ class ElkPdf extends tFPDF
 	 */
 	private function _get_page_height(): void
 	{
-		$this->page_height = $this->h - $this->bMargin - $this->tMargin;
+		$this->page_height = (int) round($this->h - $this->bMargin - $this->tMargin, 0);
 	}
 }
 
@@ -1153,6 +1157,7 @@ class VariableStream
 {
 	protected int $position;
 	protected string $varname;
+	public $context;
 
 	/**
 	 * Callback for fopen()

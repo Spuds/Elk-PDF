@@ -127,7 +127,7 @@ class PDF_Controller extends Action_Controller
 
 		try
 		{
-			$pdf = $this->initializePdf();
+			$pdf = $this->initializePdf($mbname, $context);
 
 			// On to the posts for this topic
 			$count = 0;
@@ -151,13 +151,14 @@ class PDF_Controller extends Action_Controller
 	 *
 	 * @return ElkPdf The initialized ElkPdf object.
 	 */
-	private function initializePdf(): ElkPdf
+	private function initializePdf($mbname, $context): ElkPdf
 	{
+
 		// Portrait, millimeter, page size (Letter, A4, etc)
 		$pdf = new ElkPdf($this->pdf_orientation, $this->pdf_unit, $this->pdf_page);
 
 		// Stream handle for external images
-		stream_wrapper_register("elkimg", "VariableStream");
+		stream_wrapper_register('elkimg', 'VariableStream');
 
 		// Common page setup
 		$margin = 28.35 / (72 / 25.4); // based on unit mm in the above instance
