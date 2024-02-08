@@ -3,7 +3,7 @@
 <package-info xmlns="https://www.elkarte.net/site/package-info" xmlns:elk="https://www.elkarte.net/">
 	<id>Spuds:elk2pdf</id>
 	<name>Print to PDF</name>
-	<version>1.2.0</version>
+	<version>1.2.1</version>
 	<type>addon</type>
 	<license><![CDATA[
 /**
@@ -12,7 +12,7 @@
  * @author spuds
  * @license BSD-3
  *
- * @version 1.2.0
+ * @version 1.2.1
  */
 ]]></license>
 	<install for="1.1 - 1.1.99">
