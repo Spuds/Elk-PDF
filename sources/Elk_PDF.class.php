@@ -6,7 +6,7 @@
  * @copyright (c) 2011-2024 Spuds
  * @license BSD http://opensource.org/licenses/BSD-3-Clause
  *
- * @version 1.2.0
+ * @version 1.2.1
  *
  */
 
@@ -25,7 +25,7 @@ class ElkPdf extends tFPDF
 	/** Start position of a quote block, used to draw a box */
 	private int $quote_start_y = 0;
 	/** Line height for breaks etc */
-	private int $line_height = 5;
+	private int $line_height = 4;
 	/** The html that will be parsed */
 	private string $html = '';
 	/** If this the first node, used to prevent excess whitespace at start */
@@ -54,6 +54,8 @@ class ElkPdf extends tFPDF
 	private int $u = 0;
 	private int $i = 0;
 	private int $b = 0;
+	/** default font size */
+	private $font_size = 9;
 
 	/**
 	 * Converts a block of HTML to appropriate fPDF commands
@@ -67,7 +69,7 @@ class ElkPdf extends tFPDF
 		$this->_prepare_html();
 
 		// Set the default font family
-		$this->SetFont($this->font_face, '', 10);
+		$this->SetFont($this->font_face, '', $this->font_size);
 
 		// Split up all the tags
 		$tags = preg_split('~<(.*?)>~', $this->html, -1, PREG_SPLIT_DELIM_CAPTURE);
@@ -187,7 +189,7 @@ class ElkPdf extends tFPDF
 			case 'pre':
 				// Preformatted, like a code block
 				$this->AddFont('DejaVuMono', '', 'DejaVuSansMono.ttf', true);
-				$this->SetFont('DejaVuMono', '', 7);
+				$this->SetFont('DejaVuMono', '', $this->font_size - 2);
 				$this->_set_style('b', false);
 				$this->_set_style('i', false);
 				$this->Ln($this->line_height);
@@ -195,7 +197,7 @@ class ElkPdf extends tFPDF
 				break;
 			case 'blockquote':
 				$this->_elk_set_text_color(100, 100, 45);
-				$this->SetFont($this->font_face, '', 8);
+				$this->SetFont($this->font_face, '', $this->font_size - 1);
 				$this->Ln(4);
 				break;
 			case 'i':
@@ -260,7 +262,7 @@ class ElkPdf extends tFPDF
 					if ($this->in_quote === 0)
 					{
 						$this->quote_start_y = $this->GetY();
-						$this->SetFont($this->font_face, '', 8);
+						$this->SetFont($this->font_face, '', $this->font_size - 1);
 					}
 
 					// Keep track of quote depth so they are indented
@@ -273,7 +275,7 @@ class ElkPdf extends tFPDF
 				{
 					$this->_draw_line();
 					$this->AddFont('DejaVuMono', '', 'DejaVuSansMono.ttf', true);
-					$this->SetFont('DejaVuMono', '', 8);
+					$this->SetFont('DejaVuMono', '', $this->font_size - 1);
 				}
 				break;
 			case 'hr':
@@ -298,7 +300,7 @@ class ElkPdf extends tFPDF
 		{
 			// Closing tag
 			case 'pre':
-				$this->SetFont($this->font_face, '', 10);
+				$this->SetFont($this->font_face, '', $this->font_size);
 				break;
 			case 'blockquote':
 				$this->in_quote--;
@@ -308,7 +310,7 @@ class ElkPdf extends tFPDF
 
 				if ($this->in_quote === 0)
 				{
-					$this->SetFont($this->font_face, '', 10);
+					$this->SetFont($this->font_face, '', $this->font_size);
 					$this->_elk_set_text_color(0, 0, 0);
 					$this->SetFillColor(0, 0, 0);
 					$this->_draw_box();
@@ -383,9 +385,9 @@ class ElkPdf extends tFPDF
 		// Underline blue text for links
 		$this->SetTextColor(0, 0, 255);
 		$this->_set_style('u', true);
-		$this->SetFont($this->font_face, '', ($this->in_quote ? 8 : 10));
+		$this->SetFont($this->font_face, '', ($this->in_quote ? $this->font_size - 1 : $this->font_size));
 		$this->Write($this->line_height, !empty($caption) ? $caption : ' ', $url);
-		$this->SetFont($this->font_face, '', 10);
+		$this->SetFont($this->font_face, '', $this->font_size);
 		$this->_set_style('u', false);
 		$this->SetTextColor(-1);
 	}
@@ -674,9 +676,16 @@ class ElkPdf extends tFPDF
 		$success = false;
 
 		// Open the file and check the "interlaced" flag at byte 13 of the iHDR
-		$handle = fopen($attachment['filename'], 'rb');
-		$contents = fread($handle, 32);
-		fclose($handle);
+		try
+		{
+			$handle = fopen($attachment['filename'], 'rb');
+			$contents = fread($handle, 32);
+			fclose($handle);
+		}
+		catch (Exception $e)
+		{
+			return;
+		}
 
 		// The interlace flag is on, try to de-interlace to a temp file
 		if (ord($contents[28]) !== 0)
@@ -918,22 +927,22 @@ class ElkPdf extends tFPDF
 
 		// The question
 		$this->Ln(2);
-		$this->SetFont($this->font_face, '', 10);
+		$this->SetFont($this->font_face, '', $this->font_size);
 		$this->Write($this->line_height, $txt['poll_question'] . ': ');
-		$this->SetFont($this->font_face, 'B', 10);
+		$this->SetFont($this->font_face, 'B', $this->font_size);
 		$this->Write($this->line_height, $name);
-		$this->SetFont($this->font_face, '', 10);
+		$this->SetFont($this->font_face, '', $this->font_size);
 		$this->Ln($this->line_height);
 
 		// Choices with vote count
 		$print_options = 1;
 		foreach ($options as $option)
 		{
-			$this->SetFont($this->font_face, '', 10);
+			$this->SetFont($this->font_face, '', $this->font_size);
 			$this->Write($this->line_height, $txt['option'] . ' ' . $print_options++ . ' » ');
-			$this->SetFont($this->font_face, 'B', 10);
+			$this->SetFont($this->font_face, 'B', $this->font_size);
 			$this->Write($this->line_height, $option['option']);
-			$this->SetFont($this->font_face, '', 10);
+			$this->SetFont($this->font_face, '', $this->font_size);
 
 			if ($allowed_view_votes)
 			{
@@ -968,20 +977,20 @@ class ElkPdf extends tFPDF
 
 		// Subject
 		$this->_draw_line();
-		$this->SetFont($this->font_face, '', 8);
+		$this->SetFont($this->font_face, '', $this->font_size - 1);
 		$this->Write($this->line_height, $txt['title'] . ': ');
-		$this->SetFont($this->font_face, 'B', 9);
+		$this->SetFont($this->font_face, 'B', $this->font_size - 1);
 		$this->Write($this->line_height, $subject);
 		$this->Ln(4);
 
 		// Posted by and time
-		$this->SetFont($this->font_face, '', 8);
+		$this->SetFont($this->font_face, '', $this->font_size - 1);
 		$this->Write($this->line_height, $txt['post_by'] . ': ');
-		$this->SetFont($this->font_face, 'B', 9);
+		$this->SetFont($this->font_face, 'B', $this->font_size - 1);
 		$this->Write($this->line_height, $author . ' ');
-		$this->SetFont($this->font_face, '', 8);
+		$this->SetFont($this->font_face, '', $this->font_size - 1);
 		$this->Write($this->line_height, $txt['search_on'] . ' ');
-		$this->SetFont($this->font_face, 'B', 9);
+		$this->SetFont($this->font_face, 'B', $this->font_size - 1);
 		$this->Write($this->line_height, $date);
 
 		$this->Ln($this->line_height);
@@ -1008,7 +1017,7 @@ class ElkPdf extends tFPDF
 		$linktree = $context['category_name'] . ' » ' . (!empty($context['parent_boards']) ? implode(' » ', $context['parent_boards']) . ' » ' : '') . $context['board_name'] . ' » ' . $txt['topic_started'] . ': ' . $context['poster_name'] . ' ' . $txt['search_on'] . ' ' . $context['post_time'];
 
 		// Print the linktree followed by a solid bar
-		$this->SetFont($this->font_face, '', 9);
+		$this->SetFont($this->font_face, '', $this->font_size);
 		$this->_elk_set_text_color(0, 0, 0);
 		$this->SetFillColor(0, 0, 0);
 		$this->Write($this->line_height, $linktree);
@@ -1021,7 +1030,7 @@ class ElkPdf extends tFPDF
 		{
 			$this->quote_start_y = $this->y;
 			$this->_elk_set_text_color(100, 100, 45);
-			$this->SetFont($this->font_face, '', 8);
+			$this->SetFont($this->font_face, '', $this->font_size - 1);
 		}
 	}
 
@@ -1032,7 +1041,7 @@ class ElkPdf extends tFPDF
 	{
 		global $scripturl, $topic, $mbname, $txt, $context;
 
-		$this->SetFont($this->font_face, '', 8);
+		$this->SetFont($this->font_face, '', $this->font_size - 1);
 		$this->SetY($this->h - 6);
 		$this->_draw_line();
 		$this->Write($this->line_height, $txt['page'] . ' ' . $this->page . ' / {elk_nb} ---- ' . html_entity_decode(un_htmlspecialchars($mbname)) . ' ---- ' . $txt['topic'] . ' ' . $txt['link'] . ': ');
